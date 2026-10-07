@@ -14,6 +14,7 @@ function Login() {
     const [password,setPassword]=useState("")
     const [showPassword,setShowPassword]=useState(false)
     const [loading,setLoading]=useState(false)
+    const [googleLoading,setGoogleLoading]=useState(false)
     const router=useRouter()
     const session=useSession()
     console.log(session)
@@ -31,6 +32,18 @@ try {
     setLoading(false)
 }
     }
+
+    const handleGoogleSignIn = async () => {
+        if (googleLoading) return
+        setGoogleLoading(true)
+        try {
+            await signIn("google", { callbackUrl: "/" })
+        } catch (error) {
+            console.log(error)
+            setGoogleLoading(false)
+        }
+    }
+
   return (
     <div className='flex flex-col items-center justify-center min-h-screen px-4 sm:px-6 py-12 bg-gradient-to-b from-green-50/60 via-white to-green-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 relative'>
       
@@ -97,7 +110,13 @@ try {
               </button>
             )
           })()}
+        </motion.form>
 
+        {/* Google sign-in is OUTSIDE the credentials <form> to prevent double signIn() calls.
+            If it were inside the form, a click would fire both onClick AND onSubmit (form bubble),
+            generating two /api/auth/signin/google requests and overwriting the PKCE cookie,
+            causing "invalid_grant: Invalid code verifier" from Google. */}
+        <div className='flex flex-col gap-5 w-full mt-5'>
           <div className='flex items-center gap-3 text-gray-400 dark:text-gray-600 text-xs font-semibold uppercase tracking-wider my-1'>
             <span className='flex-1 h-px bg-gray-200 dark:bg-gray-800'></span>
             OR
@@ -106,12 +125,12 @@ try {
 
           <div
             className='w-full flex items-center justify-center gap-3 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/60 py-3.5 rounded-2xl text-gray-700 dark:text-gray-200 font-medium transition-all duration-200 cursor-pointer shadow-sm'
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={handleGoogleSignIn}
           >
-            <Image src={googleImage} width={22} height={22} alt='google'/>
+            {googleLoading ? <Loader2 className='w-5 h-5 animate-spin'/> : <Image src={googleImage} width={22} height={22} alt='google'/>}
             <span>Continue with Google</span>
           </div>
-        </motion.form>
+        </div>
 
         <p
           className='cursor-pointer text-gray-600 dark:text-gray-400 mt-6 text-sm sm:text-base flex items-center gap-1.5 hover:text-green-600 transition-colors'
