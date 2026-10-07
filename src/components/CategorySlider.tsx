@@ -56,11 +56,11 @@ setShowRight(scrollLeft+clientWidth<=scrollWidth-5)
 
   return (
     <motion.div
-    className='w-[90%] md:w-[80%] mx-auto mt-10 relative'
+    className='w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-3 sm:px-6 lg:px-8 mt-10 relative'
     initial={{opacity:0,y:50}}
     whileInView={{opacity:1,y:0}}
     transition={{duration:0.6}}
-    viewport={{once:false,amount:0.5}}
+    viewport={{once:false,amount:0.3}}
 
     >
      <h2 className='text-2xl md:text-3xl font-bold text-green-700 dark:text-green-400 mb-6 text-center'>🛒 Shop by Category</h2>

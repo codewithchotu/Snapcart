@@ -73,7 +73,8 @@ isOnline:{
 
 },{timestamps:true})
 
-userSchema.index({location:"2dsphere"})
+userSchema.index({ location: "2dsphere" })
+userSchema.index({ role: 1, isOnline: 1 })
 
 const User=mongoose.models.User || mongoose.model("User",userSchema)
 export default User

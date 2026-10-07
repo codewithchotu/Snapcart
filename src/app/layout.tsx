@@ -1,5 +1,5 @@
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import "./globals.css";
 import Provider from "@/Provider";
@@ -7,7 +7,11 @@ import StoreProvider from "@/redux/StoreProvider";
 import InitUser from "@/InitUser";
 import { ThemeProvider } from "@/context/ThemeContext";
 
-
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: "Snapcart | 10 minutes grocery Delivery App",

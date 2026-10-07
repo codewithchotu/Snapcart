@@ -74,23 +74,22 @@ function ManageOrders() {
      }
     },[])
   return (
-    <div className='min-h-screen bg-gray-50 w-full'>
-      <div className='fixed top-0 left-0 w-full backdrop-blur-lg bg-white/70 shadow-sm border-b z-50'>
-<div className='max-w-3xl mx-auto flex items-center gap-4 px-4 py-3'>
- <button className='p-2 bg-gray-100 rounded-full hover:bg-gray-200 active:scale-95 transition' onClick={()=>router.push("/")}>
-<ArrowLeft size={24} className="text-green-700"/>
- </button>
- <h1 className="text-xl font-bold text-gray-800">Manage Orders</h1>
-</div>
-</div>
-<div className='max-w-6xl mx-auto px-4 pt-24 pb-16 space-y-8'>
-<div className='space-y-6'>
-{orders?.map((order,index)=>(
-    <AdminOrderCard key={index} order={order}/>
-))}
-</div>
-</div>
-
+    <div className='min-h-screen bg-gray-50 dark:bg-gray-900 w-full pt-20 pb-16'>
+      <div className='fixed top-0 left-0 w-full backdrop-blur-lg bg-white/80 dark:bg-gray-900/80 shadow-xs border-b border-gray-200 dark:border-gray-800 z-50'>
+        <div className='max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto flex items-center gap-4 px-4 sm:px-6 lg:px-8 py-3.5'>
+          <button className='p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition' onClick={()=>router.push("/")}>
+            <ArrowLeft size={22} className="text-green-700 dark:text-green-400"/>
+          </button>
+          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">Manage Orders</h1>
+        </div>
+      </div>
+      <div className='max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-4 sm:px-6 lg:px-8 pt-6'>
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+          {orders?.map((order, index) => (
+            <AdminOrderCard key={order._id || index} order={order} />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

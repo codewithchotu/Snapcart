@@ -98,7 +98,8 @@ setSearchBarOpen(false)
 
 
     return (
-        <div className='w-[95%] fixed top-4 left-1/2 -translate-x-1/2 bg-linear-to-r from-green-500 to-green-700 dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-lg shadow-black/30 dark:shadow-black/60 flex justify-between items-center h-20 px-4 md:px-8 z-50 dark:border dark:border-gray-700/50'>
+        <div className='fixed top-3 sm:top-4 left-0 right-0 z-50 px-3 sm:px-6 lg:px-8 max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto'>
+            <div className='bg-linear-to-r from-green-500 to-green-700 dark:from-gray-800 dark:to-gray-900 rounded-2xl shadow-lg shadow-black/30 dark:shadow-black/60 flex justify-between items-center h-16 sm:h-20 px-4 md:px-8 w-full dark:border dark:border-gray-700/50'>
 
             <Link href={"/"} className='text-white font-extrabold text-2xl sm:text-3xl tracking-wide hover:scale-105 transition-transform'>
                 Snapcart
@@ -183,29 +184,27 @@ setSearchBarOpen(false)
                     </AnimatePresence>
 
                     <AnimatePresence>
-                        {searchBarOpen
-                            &&
+                        {searchBarOpen && (
                             <motion.div
                                 initial={{ opacity: 0, y: -10, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 transition={{ duration: 0.4 }}
                                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                className='fixed top-24 left-1/2 -translate-x-1/2 w-[90%] bg-white dark:bg-gray-800 rounded-full shadow-lg dark:shadow-black/40 z-40 flex items-center px-4 py-2 dark:border dark:border-gray-700'
+                                className='fixed top-24 left-1/2 -translate-x-1/2 w-[90%] max-w-lg bg-white dark:bg-gray-800 rounded-full shadow-lg dark:shadow-black/40 z-40 flex items-center px-4 py-2 dark:border dark:border-gray-700'
                             >
                                 <Search className='text-gray-500 dark:text-gray-400 w-5 h-5 mr-2' />
                                 <form className='grow' onSubmit={handleSearch}>
                                     <input type="text" className='w-full outline-none text-gray-700 dark:text-gray-200 bg-transparent dark:placeholder-gray-500' placeholder='search groceries...'  value={search}
-                onChange={(e)=>setSearch(e.target.value)}/>
+                                        onChange={(e)=>setSearch(e.target.value)}/>
                                 </form>
                                 <button onClick={() => setSearchBarOpen(false)}>
                                     <X className='text-gray-500 w-5 h-5' />
                                 </button>
                             </motion.div>
-                        }
+                        )}
                     </AnimatePresence>
-
-
                 </div>
+            </div>
             </div>
             {sideBar}
         </div>

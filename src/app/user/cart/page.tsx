@@ -16,17 +16,17 @@ function CartPage() {
     const dispatch=useDispatch<AppDispatch>()
     const router=useRouter()
   return (
-    <div className='w-[95%] sm:w-[90%] md:w-[80%] mx-auto mt-8 mb-24 relative'>
-      <Link href={"/"} className='absolute -top-2 left-0 flex items-center gap-2 text-green-700 hover:text-green-800 font-medium transition-all'>
+    <div className='w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-20 relative'>
+      <Link href={"/"} className='inline-flex items-center gap-2 text-green-700 hover:text-green-800 font-semibold transition-all mb-6'>
          <ArrowLeft size={20}/>
-         <span className='hidden sm:inline'>Back to home</span>
+         <span>Back to Home</span>
       </Link>
-<motion.h2
-initial={{opacity:0,y:10}}
-animate={{opacity:1,y:0}}
-transition={{duration:0.3}}
-className='text-2xl sm:text-3xl md:text-4xl font-bold text-green-700 text-center mb-10'
->🛒 Your Shopping Cart</motion.h2>
+      <motion.h2
+        initial={{opacity:0,y:10}}
+        animate={{opacity:1,y:0}}
+        transition={{duration:0.3}}
+        className='text-2xl sm:text-3xl md:text-4xl font-bold text-green-700 dark:text-green-400 text-center mb-8'
+      >🛒 Your Shopping Cart</motion.h2>
 
 {cartData.length==0 ? (
 <motion.div

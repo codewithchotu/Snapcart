@@ -8,9 +8,9 @@ if(!mongodbUrl){
 
 
 
-let cached=global.mongoose
-if(!cached){
-    cached=global.mongoose={conn:null,promise:null}
+let cached: any = (global as any).mongoose
+if (!cached) {
+  cached = (global as any).mongoose = { conn: null, promise: null }
 }
 
 const connectDb=async ()=>{
@@ -24,10 +24,12 @@ const connectDb=async ()=>{
         cached.promise=mongoose.connect(mongodbUrl).then((conn)=>conn.connection)
     }
     try {
-        const conn=await cached.promise
+        const conn = await cached.promise
         return conn
     } catch (error) {
-        console.log(error)
+        console.error('MongoDB connection error:', error)
+        // Propagate the error so callers can handle it
+        throw error
     }
 
 }

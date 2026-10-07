@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "./auth"
 
+// Proxy files always run on Node.js runtime — no runtime export needed
+
 export async function proxy(req:NextRequest){
 
     const {pathname}=req.nextUrl
@@ -19,6 +21,8 @@ if(!session){
 }
 
 const role=session.user?.role
+
+// Only apply role checks to role-specific route prefixes
 if(pathname.startsWith("/user") && role!=="user"){
   return NextResponse.redirect(new URL("/unauthorized",req.url))
 }
@@ -34,8 +38,9 @@ return NextResponse.next()
 
 }
 
+// matcher config belongs in proxy.ts (not in middleware.ts)
 export const config = {
-  matcher:'/((?!api|_next/static|_next/image|favicon.ico).*)',
+  matcher: '/((?!api|_next/static|_next/image|favicon.ico).*)',
 }
 
 

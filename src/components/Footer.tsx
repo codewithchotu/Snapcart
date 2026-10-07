@@ -13,7 +13,7 @@ function Footer() {
       transition={{ duration: 0.6, ease: "easeOut" }}
       className="bg-linear-to-r from-green-600 to-green-700 dark:from-gray-900 dark:to-gray-800 text-white mt-20 dark:border-t dark:border-gray-700"
     >
-        <div className='w-[90%] md:w-[80%] mx-auto py-10 grid grid-cols-1 md:grid-cols-3 gap-10 border-b border-green-500/40'>
+        <div className='w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-10 border-b border-green-500/40'>
           <div>
 <h2  className='text-2xl font-bold mb-3'>Snapcart</h2>
 <p className='text-sm text-green-100 leading-relaxed'> Your one-stop online grocery store delivering freshness to your doorstep.  

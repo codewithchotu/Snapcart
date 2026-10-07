@@ -34,8 +34,8 @@ function AdminDashboardClient({ earning, stats ,chartData}: propType) {
 
 
   return (
-    <div className='pt-28 w-[90%] md:w-[80%] mx-auto'>
-      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-10 text-center sm:text-left'>
+    <div className='w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-16'>
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 text-center sm:text-left'>
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

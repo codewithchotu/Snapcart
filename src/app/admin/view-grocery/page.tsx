@@ -106,7 +106,7 @@ formData.append("image",backendImage)
 
     }
     return (
-        <div className="pt-4 w-[95%] md:w-[85%] mx-auto pb-20">
+        <div className="w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-20">
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -115,20 +115,20 @@ formData.append("image",backendImage)
             >
                 <button
                     onClick={() => router.push("/")}
-                    className='flex items-center justify-center gap-2 bg-green-100 hover:bg-green-200 text-green-700 font-semibold px-4 py-2 rounded-full transition w-full sm:w-auto'
+                    className='flex items-center justify-center gap-2 bg-green-100 dark:bg-gray-800 hover:bg-green-200 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full transition w-full sm:w-auto'
                 ><ArrowLeft size={18} /><span>Back</span></button>
-                <h1 className='text-2xl md:text-3xl font-extrabold text-green-700 flex items-center justify-center gap-2'><Package size={28} className='text-green-600' />Manage Groceries</h1>
+                <h1 className='text-2xl md:text-3xl font-extrabold text-green-700 dark:text-green-400 flex items-center justify-center gap-2'><Package size={28} className='text-green-600 dark:text-green-400' />Manage Groceries</h1>
             </motion.div>
 
             <motion.form initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
                 onSubmit={handleSearch}
-                className="flex items-center bg-white border border-gray-200 rounded-full px-5 py-3 shadow-sm mb-10 hover:shadow-lg transition-all max-w-lg mx-auto w-full">
-                <Search className="text-gray-500 w-5 h-5 mr-2" />
-                <input type="text" className='w-full outline-none text-gray-700 placeholder-gray-400' placeholder='Search by name or category...' value={search} onChange={(e)=>setSearch(e.target.value)}/>
+                className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-5 py-3 shadow-sm mb-10 hover:shadow-lg transition-all max-w-lg mx-auto w-full">
+                <Search className="text-gray-500 dark:text-gray-400 w-5 h-5 mr-2" />
+                <input type="text" className='w-full outline-none text-gray-700 dark:text-gray-200 placeholder-gray-400 bg-transparent' placeholder='Search by name or category...' value={search} onChange={(e)=>setSearch(e.target.value)}/>
             </motion.form>
-            <div className='space-y-4'>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
                 {fillterd?.map((g, i) => (
                     <motion.div
                         key={i}

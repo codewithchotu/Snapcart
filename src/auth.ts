@@ -4,7 +4,7 @@ import connectDb from "./lib/db"
 import User from "./models/user.model"
 import bcrypt from "bcryptjs"
 import Google from "next-auth/providers/google"
- 
+
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -14,7 +14,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       } ,
      async authorize(credentials, request) {
-         
+          
             await connectDb()
             const email=credentials.email
             const password=credentials.password as string
@@ -43,44 +43,59 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks:{
     // token ke ander user ka data dalta hai
-    async signIn({user,account}) {
+    async signIn({ user, account }) {
       console.log(user)
-      if(account?.provider=="google"){
-        await connectDb()
-        let dbUser=await User.findOne({email:user.email})
-       if(!dbUser){
-         dbUser=await User.create({
-          name:user.name,
-          email:user.email,
-          image:user.image
-         })
-       }
-
-       user.id=dbUser._id.toString()
-       user.role=dbUser.role
+      try {
+        if (account?.provider === "google") {
+          await connectDb()
+          const normalizedEmail = (user.email || "").toLowerCase().trim()
+          let dbUser = await User.findOne({ email: normalizedEmail })
+          if (!dbUser) {
+            try {
+              dbUser = await User.create({
+                name: user.name,
+                email: normalizedEmail,
+                image: user.image,
+              })
+            } catch (e: any) {
+              // Handle duplicate-key race condition
+              if (e.code === 11000) {
+                dbUser = await User.findOne({ email: normalizedEmail })
+              } else {
+                console.error("Google signIn DB create error:", e)
+                throw e
+              }
+            }
+          }
+          user.id = dbUser._id.toString()
+          user.role = dbUser.role
+        }
+        return true
+      } catch (err) {
+        console.error("Google signIn error:", err)
+        // Returning false triggers /login?error=AccessDenied
+        return false
       }
-      return true
     },
     jwt({token,user,trigger,session}) {
         if(user){
-            token.id=user.id,
-            token.name=user.name,
-            token.email=user.email,
-            token.role=user.role
+            token.id=user.id;
+            token.name=user.name;
+            token.email=user.email;
+            token.role=user.role;
         }
-  if(trigger=="update"){
-    token.role=session.role
+  if(trigger==="update" && session?.role){
+    token.role=session.role;
   }
-
 
         return token
     },
     session({session,token}) {
         if(session.user){
-            session.user.id=token.id as string,
-            session.user.name=token.name as string,
-            session.user.email=token.email as string
-             session.user.role=token.role as string
+            session.user.id=token.id as string;
+            session.user.name=token.name as string;
+            session.user.email=token.email as string;
+            session.user.role=token.role as string;
         }
         return session
     },
@@ -91,7 +106,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session:{
     strategy:"jwt",
-    maxAge:10*24*60*60*1000
+    maxAge:10*24*60*60  // 10 days in seconds (not milliseconds)
   },
   secret:process.env.AUTH_SECRET
 })

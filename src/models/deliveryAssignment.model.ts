@@ -37,6 +37,10 @@ const deliveryAssignmentSchema=new mongoose.Schema<IDeliveryAssigment>({
 },{timestamps:true})
 
 
+deliveryAssignmentSchema.index({ assignedTo: 1, status: 1 });
+deliveryAssignmentSchema.index({ brodcastedTo: 1, status: 1 });
+deliveryAssignmentSchema.index({ order: 1 });
+
 const DeliveryAssignment=mongoose.models.DeliveryAssignment || mongoose.model("DeliveryAssignment",deliveryAssignmentSchema)
 
 export default DeliveryAssignment

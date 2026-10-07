@@ -169,84 +169,91 @@ useEffect(()=>{
   }
   
   return (
-    <div className='w-full min-h-screen bg-linear-to-b from-green-50 to-white'>
-      <div className='max-w-2xl mx-auto pb-24'>
-            <div className='sticky top-0 bg-white/80 backdrop-blur-xl p-4 border-b shadow flex gap-3 items-center z-999'>
-              <button className='p-2 bg-green-100 rounded-full' onClick={()=>router.back()}><ArrowLeft className="text-green-700" size={20} /></button>
-              <div>
-<h2 className='text-xl font-bold'>Track Order</h2>
-<p className='text-sm text-gray-600'>order#{order?._id?.toString().slice(-6)} <span className='text-green-700 font-semibold'>{order?.status}</span></p>
-              </div>
-              
+    <div className='w-full min-h-screen bg-linear-to-b from-green-50 to-white dark:from-gray-900 dark:to-gray-800 pt-20 pb-16'>
+      <div className='sticky top-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl p-4 border-b border-gray-200 dark:border-gray-800 shadow-xs z-50'>
+        <div className='max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto flex gap-3 items-center px-4 sm:px-6 lg:px-8'>
+          <button className='p-2 bg-green-100 dark:bg-gray-800 rounded-full hover:bg-green-200 transition' onClick={() => router.back()}>
+            <ArrowLeft className="text-green-700 dark:text-green-400" size={20} />
+          </button>
+          <div>
+            <h2 className='text-xl font-bold text-gray-800 dark:text-gray-100'>Track Order</h2>
+            <p className='text-sm text-gray-600 dark:text-gray-400'>Order #{order?._id?.toString().slice(-6)} <span className='text-green-700 dark:text-green-400 font-semibold capitalize'>({order?.status})</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div className='max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-4 sm:px-6 lg:px-8 mt-6'>
+        <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-start'>
+          <div className='lg:col-span-7 rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-lg h-[350px] sm:h-[450px] lg:h-[550px]'>
+            <LiveMap userLocation={userLocation} deliveryBoyLocation={deliveryBoyLocation} />
+          </div>
+
+          <div className='lg:col-span-5 bg-white dark:bg-gray-800 rounded-3xl shadow-lg border border-gray-100 dark:border-gray-700 p-4 sm:p-6 h-[500px] lg:h-[550px] flex flex-col'>
+            <div className='flex justify-between items-center mb-3'>
+              <span className='font-semibold text-gray-700 dark:text-gray-200 text-sm'>Quick Replies</span>
+              <motion.button
+                disabled={loading}
+                whileTap={{ scale: 0.9 }}
+                className="px-3 py-1 text-xs flex items-center gap-1 bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 rounded-full shadow-xs border border-purple-200 dark:border-purple-800 cursor-pointer"
+                onClick={getSuggestion}
+              >
+                <Sparkle size={14} />{loading ? <Loader className="w-4 h-4 animate-spin" /> : "AI suggest"}
+              </motion.button>
             </div>
-           <div className='px-4 mt-6 space-y-4'>
-               <div className='rounded-3xl overflow-hidden border shadow'>
-                   <LiveMap userLocation={userLocation} deliveryBoyLocation={deliveryBoyLocation}/>
-               </div>
 
- <div className='bg-white rounded-3xl shadow-lg border p-4 h-[430px] flex flex-col'>
+            <div className='flex gap-2 flex-wrap mb-3 max-h-24 overflow-y-auto scrollbar-hide'>
+              {suggestions.map((s) => (
+                <motion.div
+                  key={s}
+                  whileTap={{ scale: 0.92 }}
+                  className="px-3 py-1 text-xs bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 cursor-pointer text-green-700 dark:text-green-300 rounded-full"
+                  onClick={() => setNewMessage(s)}
+                >
+                  {s}
+                </motion.div>
+              ))}
+            </div>
 
-   <div className='flex justify-between items-center mb-3'>
-        <span className='font-semibold text-gray-700 text-sm'>Quick Replies</span>
-        <motion.button
-        disabled={loading}
-          whileTap={{ scale: 0.9 }}
-          className="px-3 py-1 text-xs flex items-center gap-1 bg-purple-100 text-purple-700 rounded-full shadow-sm border border-purple-200 cursor-pointer"
-onClick={getSuggestion}
-        ><Sparkle size={14} />{loading?<Loader className="w-5 h-5 animate-spin" />:"AI suggest"}</motion.button>
-      </div>
+            <div className='flex-1 overflow-y-auto p-2 space-y-3 border border-gray-100 dark:border-gray-700 rounded-2xl bg-gray-50/50 dark:bg-gray-900/40' ref={chatBoxRef}>
+              <AnimatePresence>
+                {messages?.map((msg) => (
+                  <motion.div
+                    key={msg._id?.toString() || Math.random().toString()}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex ${msg.senderId.toString() == userData?._id ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className={`px-4 py-2 max-w-[80%] rounded-2xl shadow-xs text-sm 
+                        ${
+                          msg.senderId.toString() === userData?._id
+                            ? "bg-green-600 text-white rounded-br-none"
+                            : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-gray-600 rounded-bl-none"
+                        }`}>
+                      <p>{msg.text}</p>
+                      <p className='text-[10px] opacity-70 mt-1 text-right'>{msg.time}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
 
-      <div className='flex gap-2 flex-wrap mb-3'>
-        {suggestions.map((s, i) => (
-          <motion.div
-            key={s}
-            whileTap={{ scale: 0.92 }}
-            className="px-3 py-1 text-xs bg-green-50 border border-green-200 cursor-pointer text-green-700 rounded-full"
-           onClick={()=>setNewMessage(s)}
-          >
-            {s}
-          </motion.div>
-        ))}
-      </div>
-
-      <div className='flex-1 overflow-y-auto p-2 space-y-3' ref={chatBoxRef}>
-        <AnimatePresence>
-          {messages?.map((msg, index) => (
-            <motion.div
-              key={msg._id?.toString()}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className={`flex ${msg.senderId.toString()==userData?._id?"justify-end":"justify-start"}`}
-            >
-              <div  className={`px-4 py-2 max-w-[75%] rounded-2xl shadow 
-                  ${
-                    msg.senderId.toString() === userData?._id
-                      ? "bg-green-600 text-white rounded-br-none"
-                      : "bg-gray-100 text-gray-800 rounded-bl-none"
-                  }`}>
-                <p >{msg.text}</p>
-                <p className='text-[10px] opacity-70 mt-1 text-right'>{msg.time}</p>
-              </div>
-
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
-
-      <div className='flex gap-2 mt-3 border-t pt-3'>
-        <input type="text" placeholder='Type a Message...' className='flex-1 bg-gray-100 px-4 py-2 rounded-xl outline-none focus:ring-2 focus:ring-green-500' value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
-        <button className='bg-green-600 hover:bg-green-700 p-3 rounded-xl text-white' onClick={sendMsg}><Send size={18} /></button>
-      </div>
-
-    </div>
-
-
-
-
-           </div>
+            <div className='flex gap-2 mt-3 border-t border-gray-100 dark:border-gray-700 pt-3'>
+              <input
+                type="text"
+                placeholder='Type a Message...'
+                className='flex-1 bg-gray-100 dark:bg-gray-700 px-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-green-500 text-sm dark:text-gray-100'
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendMsg()}
+              />
+              <button className='bg-green-600 hover:bg-green-700 px-4 py-2.5 rounded-xl text-white font-medium transition' onClick={sendMsg}>
+                <Send size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

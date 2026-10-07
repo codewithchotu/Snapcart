@@ -168,65 +168,65 @@ const handleOnlinePayment=async ()=>{
 
 
     return (
-        <div className='w-[92%] md:w-[80%] mx-auto py-10 relative'>
+        <div className='w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-20 relative'>
             <motion.button
                 whileTap={{ scale: 0.97 }}
-                className='absolute left-0 top-2 flex items-center gap-2 text-green-700 hover:text-green-800 font-semibold'
+                className='inline-flex items-center gap-2 text-green-700 dark:text-green-400 hover:text-green-800 font-semibold mb-6'
                 onClick={() => router.push("/user/cart")}
             >
-                <ArrowLeft size={16} />
-                <span>Back to cart</span>
+                <ArrowLeft size={18} />
+                <span>Back to Cart</span>
             </motion.button>
 
             <motion.h1
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className='text-3xl md:text-4xl font-bold text-green-700 text-center mb-10'
+                className='text-3xl md:text-4xl font-bold text-green-700 dark:text-green-400 text-center mb-8'
             >Checkout</motion.h1>
 
-            <div className='grid md:grid-cols-2 gap-8'>
+            <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3 }}
-                    className='bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100'
+                    className='lg:col-span-7 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-gray-100 dark:border-gray-700'
                 >
-                    <h2 className='text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2'>
-                        <MapPin className='text-green-700' /> Delivery Address
+                    <h2 className='text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2'>
+                        <MapPin className='text-green-700 dark:text-green-400' /> Delivery Address
                     </h2>
                     <div className='space-y-4'>
                         <div className='relative'>
-                            <User className="absolute left-3 top-3 text-green-600" size={18} />
-                            <input type="text" value={address.fullName} onChange={(e) => setAddress((prev) => ({ ...prev, fullName: e.target.value }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50' />
+                            <User className="absolute left-3 top-3 text-green-600 dark:text-green-400" size={18} />
+                            <input type="text" value={address.fullName} onChange={(e) => setAddress((prev) => ({ ...prev, fullName: e.target.value }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-100' />
                         </div>
                         <div className='relative'>
-                            <Phone className="absolute left-3 top-3 text-green-600" size={18} />
-                            <input type="text" value={address.mobile} onChange={(e) => setAddress((prev) => ({ ...prev, mobile:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50' />
+                            <Phone className="absolute left-3 top-3 text-green-600 dark:text-green-400" size={18} />
+                            <input type="text" value={address.mobile} onChange={(e) => setAddress((prev) => ({ ...prev, mobile:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-100' />
                         </div>
                         <div className='relative'>
-                            <Home className="absolute left-3 top-3 text-green-600" size={18} />
-                            <input type="text" value={address.fullAddress} placeholder='Full Address' onChange={(e) => setAddress((prev) => ({ ...prev, fullAddress: e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50' />
+                            <Home className="absolute left-3 top-3 text-green-600 dark:text-green-400" size={18} />
+                            <input type="text" value={address.fullAddress} placeholder='Full Address' onChange={(e) => setAddress((prev) => ({ ...prev, fullAddress: e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-100' />
                         </div>
-                        <div className='grid grid-cols-3 gap-3'>
+                        <div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
                             <div className='relative'>
-                                <Building className="absolute left-3 top-3 text-green-600" size={18} />
-                                <input type="text" value={address.city} placeholder='city' onChange={(e) => setAddress((prev) => ({ ...prev, city:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50' />
+                                <Building className="absolute left-3 top-3 text-green-600 dark:text-green-400" size={18} />
+                                <input type="text" value={address.city} placeholder='City' onChange={(e) => setAddress((prev) => ({ ...prev, city:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-100' />
                             </div>
                             <div className='relative'>
-                                <Navigation className="absolute left-3 top-3 text-green-600" size={18} />
-                                <input type="text" value={address.state} placeholder='state' onChange={(e) => setAddress((prev) => ({ ...prev, state:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50' />
+                                <Navigation className="absolute left-3 top-3 text-green-600 dark:text-green-400" size={18} />
+                                <input type="text" value={address.state} placeholder='State' onChange={(e) => setAddress((prev) => ({ ...prev, state:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-100' />
                             </div>
                             <div className='relative'>
-                                <Search className="absolute left-3 top-3 text-green-600" size={18} />
-                                <input type="text" value={address.pincode} placeholder='pincode' onChange={(e) => setAddress((prev) => ({ ...prev, pincode:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50' />
+                                <Search className="absolute left-3 top-3 text-green-600 dark:text-green-400" size={18} />
+                                <input type="text" value={address.pincode} placeholder='Pincode' onChange={(e) => setAddress((prev) => ({ ...prev, pincode:  e.target.value  }))} className='pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50 dark:bg-gray-700 dark:text-gray-100' />
                             </div>
                         </div>
                         <div className='flex gap-2 mt-3'>
-                            <input type="text" placeholder='search city or area...' className='flex-1 border rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none' value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)}/>
-                            <button className='bg-green-600 text-white px-5 rounded-lg hover:bg-green-700 transition-all font-medium' onClick={handleSearchQuery}>{searchLoading?<Loader2 size={16} className='animate-spin'/>:"Search"}</button>
+                            <input type="text" placeholder='search city or area...' className='flex-1 border rounded-lg p-3 text-sm focus:ring-2 focus:ring-green-500 outline-none dark:bg-gray-700 dark:text-gray-100' value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)}/>
+                            <button className='bg-green-600 text-white px-5 rounded-lg hover:bg-green-700 transition-all font-medium text-sm' onClick={handleSearchQuery}>{searchLoading?<Loader2 size={16} className='animate-spin'/>:"Search"}</button>
                         </div>
-                        <div className='relative mt-6 h-[330px] rounded-xl overflow-hidden border border-gray-200 shadow-inner'>
+                        <div className='relative mt-6 h-[300px] sm:h-[360px] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-inner'>
                             {position &&  <CheckOutMap position={position} setPosition={setPosition}/>}
                               <motion.button
                               whileTap={{scale:0.93}}
@@ -242,7 +242,7 @@ const handleOnlinePayment=async ()=>{
                  initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3 }}
-                    className='bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-gray-100 h-fit'
+                    className='lg:col-span-5 bg-white dark:bg-gray-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-gray-100 dark:border-gray-700 h-fit'
                 >
                     <h2 className='text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2'><CreditCard className='text-green-600'/> Payment Method</h2>
                     <div className='space-y-4 mb-6'>

@@ -8,8 +8,16 @@
    Uses Tailwind's `dark` class strategy
    ============================================ */
 
-/* Smooth transitions for all theme changes */
+/* Base Root Scaling & Reset */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  box-sizing: border-box;
+}
+
 *, *::before, *::after {
+  box-sizing: inherit;
   transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease, box-shadow 0.25s ease;
 }
 
