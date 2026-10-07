@@ -7,6 +7,12 @@ import Google from "next-auth/providers/google"
 
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // trustHost is required on Vercel / behind any reverse proxy.
+  // Without it, Auth.js v5 cannot reliably determine the request host,
+  // causing the PKCE code_verifier cookie to be set under one perceived
+  // origin and read back under a different one → "Invalid code verifier".
+  trustHost: true,
+
   providers: [
     Credentials({
         credentials: {
