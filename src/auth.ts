@@ -7,11 +7,17 @@ import Google from "next-auth/providers/google"
 
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  // trustHost is required on Vercel / behind any reverse proxy.
-  // Without it, Auth.js v5 cannot reliably determine the request host,
-  // causing the PKCE code_verifier cookie to be set under one perceived
-  // origin and read back under a different one → "Invalid code verifier".
+  // trustHost is required on Vercel / behind any reverse proxy so Auth.js
+  // trusts the x-forwarded-host header for URL resolution.
   trustHost: true,
+
+  // Explicitly pin useSecureCookies=true so the PKCE code_verifier cookie
+  // name is always "__Secure-authjs.pkce.code_verifier" on both the signin
+  // and callback requests. Without this, if url.protocol detection is
+  // inconsistent between the two requests (a known issue on some Vercel
+  // edge/proxy configurations), the cookie name changes → the JWT
+  // decryption salt changes → "Invalid code verifier" from Google.
+  useSecureCookies: true,
 
   providers: [
     Credentials({
