@@ -34,6 +34,13 @@ export async function POST(req: NextRequest, context: any) {
         order.status = status
         let deliveryBoysPayload: any[] = []
 
+        if (status === "delivered" || status === "cancelled") {
+            await DeliveryAssignment.updateMany(
+                { order: order._id },
+                { $set: { status: "completed", assignedTo: null } }
+            )
+        }
+
         if (status === "out of delivery") {
             console.log(`[ADMIN-ORDER] Dispatching delivery assignment for orderId: ${orderId}`)
             const { latitude, longitude } = order.address || {}

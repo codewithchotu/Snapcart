@@ -19,27 +19,54 @@ export async function GET(req: NextRequest, context: any) {
         if (!assignment) {
             return NextResponse.json({ message: "Delivery assignment not found" }, { status: 404 })
         }
+
+        // If this assignment is already assigned to THIS delivery boy, return success immediately
+        if (assignment.status === "assigned" && String(assignment.assignedTo) === String(deliveryBoyId)) {
+            await assignment.populate({ path: "order", populate: { path: "address" } })
+            console.log(`[ACCEPT] deliveryBoyId: ${deliveryBoyId}`)
+            console.log(`[ACCEPT] assignmentId: ${id}`)
+            console.log(`[ACCEPT] existingActiveAssignment: ${id}`)
+            console.log(`[ACCEPT] final assignment status: ${assignment.status}`)
+            console.log(`[ACCEPT] final order status: ${(assignment.order as any)?.status}`)
+
+            return NextResponse.json({
+                success: true,
+                message: "Order already accepted by you",
+                assignment
+            }, { status: 200 })
+        }
+
         if (assignment.status !== "brodcasted") {
             return NextResponse.json({ message: "This delivery assignment is no longer available or already taken." }, { status: 400 })
         }
 
-        // Check if delivery boy is already assigned to a DIFFERENT active non-completed order
-        const alreadyAssigned = await DeliveryAssignment.findOne({
+        // Check if delivery boy is already assigned to a DIFFERENT active in-progress order
+        const assignedRecords = await DeliveryAssignment.find({
             _id: { $ne: id },
             assignedTo: deliveryBoyId,
-            status: { $nin: ["brodcasted", "completed"] }
+            status: "assigned"
         }).populate("order")
 
-        if (alreadyAssigned) {
-            const orderStatus = (alreadyAssigned.order as any)?.status
-            if (orderStatus === "delivered" || orderStatus === "completed" || orderStatus === "cancelled") {
-                // Auto-cleanup stale assignment
-                alreadyAssigned.status = "completed"
-                alreadyAssigned.assignedTo = null
-                await alreadyAssigned.save()
+        let existingActiveAssignment: any = null
+
+        for (const record of assignedRecords) {
+            const orderObj = record.order as any
+            if (!orderObj || orderObj.status === "delivered" || orderObj.status === "completed" || orderObj.status === "cancelled" || orderObj.deliveryOtpVerification === true) {
+                // Auto-cleanup stale assignment record
+                console.log(`[ACCEPT] Auto-cleaning stale assignment ${record._id} for order status: ${orderObj?.status || 'missing'}`)
+                record.status = "completed"
+                record.assignedTo = null
+                await record.save()
             } else {
-                return NextResponse.json({ message: "You are already assigned to another active delivery order." }, { status: 400 })
+                existingActiveAssignment = record
             }
+        }
+
+        if (existingActiveAssignment) {
+            console.log(`[ACCEPT] deliveryBoyId: ${deliveryBoyId}`)
+            console.log(`[ACCEPT] assignmentId: ${id}`)
+            console.log(`[ACCEPT] existingActiveAssignment: ${existingActiveAssignment._id}`)
+            return NextResponse.json({ message: "You are already assigned to another active delivery order." }, { status: 400 })
         }
 
         assignment.assignedTo = deliveryBoyId
@@ -71,7 +98,13 @@ export async function GET(req: NextRequest, context: any) {
             }
         )
 
-        console.log(`[ACCEPT-ASSIGNMENT] Successfully assigned assignment ${id} to DeliveryBoy ${deliveryBoyId}`)
+        await assignment.populate({ path: "order", populate: { path: "address" } })
+
+        console.log(`[ACCEPT] deliveryBoyId: ${deliveryBoyId}`)
+        console.log(`[ACCEPT] assignmentId: ${id}`)
+        console.log(`[ACCEPT] existingActiveAssignment: null`)
+        console.log(`[ACCEPT] final assignment status: ${assignment.status}`)
+        console.log(`[ACCEPT] final order status: ${order.status}`)
 
         return NextResponse.json({
             success: true,

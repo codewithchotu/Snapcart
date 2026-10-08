@@ -374,9 +374,20 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
       console.log(`[DELIVERY-DASHBOARD] Accepting assignment ID: ${id}`)
       const res = await axios.get(`/api/delivery/assignment/${id}/accept-assignment`)
       console.log("[DELIVERY-DASHBOARD] Accept assignment response:", res.data)
-      setAssignments((prev) => (Array.isArray(prev) ? prev : []).filter((a) => String(a._id) !== String(id)))
+
+      if (res.data?.success && res.data?.assignment) {
+        const acceptedAssignment = res.data.assignment
+        setActiveOrder(acceptedAssignment)
+        if (acceptedAssignment.order?.address) {
+          setUserLocation({
+            latitude: Number(acceptedAssignment.order.address.latitude || 0),
+            longitude: Number(acceptedAssignment.order.address.longitude || 0)
+          })
+        }
+        setAssignments((prev) => (Array.isArray(prev) ? prev : []).filter((a) => String(a._id) !== String(id)))
+        setCurrentView('assignments')
+      }
       await fetchCurrentOrder()
-      setCurrentView('assignments')
     } catch (error: any) {
       console.error("[DELIVERY-DASHBOARD] Accept assignment error:", error?.response?.data || error?.message)
       alert(error?.response?.data?.message || "Failed to accept assignment. Please try again.")
@@ -444,8 +455,11 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
 
   const handleBackToDashboard = async () => {
     if (activeOrder?.order?._id) {
-      const orderId = String(activeOrder.order._id)
-      setDismissedOrderIds((prev) => [...prev, orderId])
+      const isCompleted = activeOrder?.order?.deliveryOtpVerification || activeOrder?.order?.status === "delivered"
+      if (isCompleted) {
+        const orderId = String(activeOrder.order._id)
+        setDismissedOrderIds((prev) => [...prev, orderId])
+      }
     }
     setActiveOrder(null)
     setShowOtpBox(false)
@@ -458,6 +472,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
 
   if (activeOrder) {
     const isCompleted = activeOrder?.order?.deliveryOtpVerification || activeOrder?.order?.status === "delivered"
+    const orderAddress = activeOrder?.order?.address
 
     return (
       <div className='p-4 pt-[100px] pb-16 min-h-screen bg-gray-50 dark:bg-gray-900'>
@@ -480,8 +495,87 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
           </div>
 
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-start'>
-            <div className='lg:col-span-7 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden h-[350px] sm:h-[450px] lg:h-[550px]'>
-              <LiveMap userLocation={userLocation} deliveryBoyLocation={deliveryBoyLocation} />
+            <div className='lg:col-span-7 flex flex-col gap-6'>
+              <div className='rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden h-[350px] sm:h-[450px] lg:h-[500px]'>
+                <LiveMap userLocation={userLocation} deliveryBoyLocation={deliveryBoyLocation} />
+              </div>
+
+              {/* Customer Details Card */}
+              <div className='bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-md p-6 space-y-4'>
+                <div className='flex items-center justify-between border-b border-gray-100 dark:border-gray-700 pb-3'>
+                  <h2 className='text-lg font-bold text-gray-800 dark:text-gray-100'>Customer Details</h2>
+                  {orderAddress?.mobile && (
+                    <a
+                      href={`tel:${orderAddress.mobile}`}
+                      className='px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs'
+                    >
+                      <span>📞 Call Customer</span>
+                    </a>
+                  )}
+                </div>
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm'>
+                  <div>
+                    <span className='text-gray-500 dark:text-gray-400 block text-xs font-semibold uppercase'>Customer Name</span>
+                    <span className='font-bold text-gray-800 dark:text-gray-200 text-base'>
+                      {orderAddress?.fullName || "N/A"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className='text-gray-500 dark:text-gray-400 block text-xs font-semibold uppercase'>Contact Number</span>
+                    <span className='font-bold text-gray-800 dark:text-gray-200 text-base'>
+                      {orderAddress?.mobile ? `+91 ${orderAddress.mobile}` : "N/A"}
+                    </span>
+                  </div>
+                  <div className='sm:col-span-2'>
+                    <span className='text-gray-500 dark:text-gray-400 block text-xs font-semibold uppercase'>Delivery Address</span>
+                    <span className='font-medium text-gray-800 dark:text-gray-200 leading-relaxed block mt-0.5'>
+                      {orderAddress?.fullAddress || "No address provided"}
+                      {orderAddress?.city ? `, ${orderAddress.city}` : ""}
+                      {orderAddress?.pincode ? ` - ${orderAddress.pincode}` : ""}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Details Card */}
+              <div className='bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-md p-6 space-y-4'>
+                <div className='flex items-center justify-between border-b border-gray-100 dark:border-gray-700 pb-3'>
+                  <h2 className='text-lg font-bold text-gray-800 dark:text-gray-100'>Order Details</h2>
+                  <span className={`px-2.5 py-1 text-xs font-bold rounded-md ${
+                    activeOrder.order?.isPaid
+                      ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300'
+                      : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
+                  }`}>
+                    {activeOrder.order?.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment'} ({activeOrder.order?.isPaid ? 'Paid' : 'Unpaid'})
+                  </span>
+                </div>
+
+                {Array.isArray(activeOrder.order?.items) && activeOrder.order.items.length > 0 && (
+                  <div className='divide-y divide-gray-100 dark:divide-gray-700 max-h-[200px] overflow-y-auto pr-1'>
+                    {activeOrder.order.items.map((item: any, idx: number) => (
+                      <div key={idx} className='py-2 flex items-center justify-between text-sm'>
+                        <div className='flex items-center gap-3'>
+                          {item.image ? (
+                            <img src={item.image} alt={item.name} className='w-10 h-10 object-cover rounded-lg border border-gray-100 dark:border-gray-700' />
+                          ) : (
+                            <div className='w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center text-lg'>📦</div>
+                          )}
+                          <div>
+                            <p className='font-semibold text-gray-800 dark:text-gray-200'>{item.name}</p>
+                            <p className='text-xs text-gray-500 dark:text-gray-400'>{item.quantity} x {item.unit || 'unit'}</p>
+                          </div>
+                        </div>
+                        <span className='font-bold text-gray-800 dark:text-gray-200'>₹{Number(item.price || 0) * (item.quantity || 1)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className='flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700 font-bold text-base text-gray-900 dark:text-gray-100'>
+                  <span>Total Amount</span>
+                  <span className='text-green-600 dark:text-green-400 text-lg'>₹{activeOrder.order?.totalAmount || 0}</span>
+                </div>
+              </div>
             </div>
 
             <div className='lg:col-span-5 flex flex-col gap-6'>

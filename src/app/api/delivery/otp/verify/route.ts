@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         })
 
         await emitEventHandler("order-status-update", { orderId: order._id, status: "delivered" })
-        await DeliveryAssignment.updateOne(
+        await DeliveryAssignment.updateMany(
             { order: orderId },
             { $set: { assignedTo: null, status: "completed" } }
         )

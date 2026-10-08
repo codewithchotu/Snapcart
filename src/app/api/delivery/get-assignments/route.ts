@@ -17,10 +17,13 @@ export async function GET() {
        const assignments = await DeliveryAssignment.find({
            status: "brodcasted",
            rejectedBy: { $ne: deliveryBoyId }
-       }).populate("order").sort({ createdAt: -1 })
+       }).populate({
+           path: "order",
+           populate: { path: "address" }
+       }).sort({ createdAt: -1 })
        
        const validAssignments = Array.isArray(assignments) 
-           ? assignments.filter((a: any) => a && a.order)
+           ? assignments.filter((a: any) => a && a.order && a.order.status === "out of delivery" && !a.order.deliveryOtpVerification)
            : []
 
        return NextResponse.json(
