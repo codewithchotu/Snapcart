@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import LiveMap from './LiveMap'
 import DeliveryChat from './DeliveryChat'
-import { Loader, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { Loader, ArrowLeft, CheckCircle2, Bell, Volume2 } from 'lucide-react'
 import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 interface ILocation {
@@ -19,6 +19,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
   const [assignments, setAssignments] = useState<any[]>([])
   const { userData } = useSelector((state: RootState) => state.user)
   const [activeOrder, setActiveOrder] = useState<any>(null)
+  const [currentView, setCurrentView] = useState<'assignments' | 'earnings'>('assignments')
   const [showOtpBox, setShowOtpBox] = useState(false)
   const [otpError, setOtpError] = useState("")
   const [sendOtpLoading, setSendOtpLoading] = useState(false)
@@ -34,20 +35,137 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
   })
 
   const [dismissedOrderIds, setDismissedOrderIds] = useState<string[]>([])
+  const [notificationToast, setNotificationToast] = useState<{ show: boolean; message: string; assignmentId?: string } | null>(null)
+
+  // Web Audio API chime sound generator
+  const playNotificationSound = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      
+      // Dual tone chime (D5 -> A5)
+      const osc1 = ctx.createOscillator()
+      const gain1 = ctx.createGain()
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(587.33, ctx.currentTime)
+      osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15)
+      gain1.gain.setValueAtTime(0.4, ctx.currentTime)
+      gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6)
+      
+      osc1.connect(gain1)
+      gain1.connect(ctx.destination)
+      osc1.start()
+      osc1.stop(ctx.currentTime + 0.6)
+    } catch (e) {
+      console.log("[AUDIO] Play sound error:", e)
+    }
+  }, [])
+
+  // Request native browser notifications permission on mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {})
+      }
+    }
+  }, [])
+
+  const mergeAssignments = useCallback((incoming: any) => {
+    setAssignments((prev) => {
+      const currentArr = Array.isArray(prev) ? prev : []
+      const map = new Map<string, any>()
+
+      // Preserve existing assignments
+      currentArr.forEach((item) => {
+        if (item && typeof item === 'object') {
+          const id = String(item._id || item.id || '')
+          if (id) {
+            map.set(id, item)
+          }
+        }
+      })
+
+      // Normalize incoming payload into array
+      let rawList: any[] = []
+      if (Array.isArray(incoming)) {
+        rawList = incoming
+      } else if (incoming && typeof incoming === 'object') {
+        if (Array.isArray(incoming.data)) {
+          rawList = incoming.data
+        } else if (Array.isArray(incoming.assignments)) {
+          rawList = incoming.assignments
+        } else {
+          rawList = [incoming]
+        }
+      }
+
+      rawList.forEach((item) => {
+        const target = item?.assignment || item?.data || item
+        if (target && typeof target === 'object') {
+          const id = String(target._id || target.id || '')
+          if (id) {
+            const existingItem = map.get(id) || {}
+            map.set(id, { ...existingItem, ...target })
+          }
+        }
+      })
+
+      return Array.from(map.values())
+    })
+  }, [])
 
   const fetchAssignments = useCallback(async () => {
     try {
       const result = await axios.get("/api/delivery/get-assignments")
-      setAssignments(result.data)
+      const rawData = result?.data
+      const serverList = Array.isArray(rawData)
+        ? rawData
+        : Array.isArray(rawData?.data)
+          ? rawData.data
+          : Array.isArray(rawData?.assignments)
+            ? rawData.assignments
+            : null
+
+      if (serverList !== null && Array.isArray(serverList)) {
+        setAssignments((prev) => {
+          const currentArr = Array.isArray(prev) ? prev : []
+          const map = new Map<string, any>()
+
+          // 1. Preserve existing assignments in local state
+          currentArr.forEach((item) => {
+            if (item && typeof item === 'object') {
+              const id = String(item._id || item.id || '')
+              if (id) {
+                map.set(id, item)
+              }
+            }
+          })
+
+          // 2. Merge server assignments
+          serverList.forEach((item: any) => {
+            if (item && typeof item === 'object') {
+              const id = String(item._id || item.id || '')
+              if (id) {
+                const existingItem = map.get(id) || {}
+                map.set(id, { ...existingItem, ...item })
+              }
+            }
+          })
+
+          return Array.from(map.values())
+        })
+      }
     } catch (error) {
-      console.log(error)
+      console.error("[DELIVERY-DASHBOARD] fetchAssignments failed:", error)
+      // Never wipe state on error
     }
   }, [])
 
   const fetchCurrentOrder = useCallback(async () => {
     try {
       const result = await axios.get("/api/delivery/current-order")
-      if (result.data.active && result.data.assignment?.order) {
+      if (result.data?.active && result.data?.assignment?.order) {
         const orderId = String(result.data.assignment.order._id)
         if (dismissedOrderIds.includes(orderId)) {
           setActiveOrder(null)
@@ -68,51 +186,96 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     }
   }, [dismissedOrderIds])
 
-  // ── Socket lifecycle + DB fallback ──────────────────────────────────────────
-  // This single effect manages: identity, new-assignment listener, reconnect-refetch.
-  // It is only active once userData._id is known (i.e. authenticated DB user exists).
+  // ── Realtime Socket Lifecycle & Multi-Event Push Listeners ─────────────────────
   useEffect(() => {
     if (!userData?._id) return
 
     const socket = getSocket()
 
-    // Helper: merge DB assignments deduplicating by _id
-    const mergeAssignments = (incoming: any[]) => {
-      setAssignments((prev) => {
-        const existing = new Map(prev.map((a) => [String(a._id), a]))
-        incoming.forEach((a) => existing.set(String(a._id), a))
-        return Array.from(existing.values())
+    const triggerAlert = (assignment: any, title = "New Order Assignment!") => {
+      playNotificationSound()
+      const orderSnippet = assignment?.order?._id ? `#${String(assignment.order._id).slice(-6)}` : ''
+      setNotificationToast({
+        show: true,
+        message: `${title} ${orderSnippet}`,
+        assignmentId: assignment?._id
       })
+
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification("🔔 New Order Assignment! 🚚", {
+            body: `You have received a new order delivery request ${orderSnippet}`,
+            icon: "/favicon.ico"
+          })
+        } catch (e) {
+          console.log("[NOTIFICATION-API] Error:", e)
+        }
+      }
     }
 
-    // Send identity and refresh assignments from DB
-    const onConnect = () => {
-      console.log("[SOCKET] Connected, socket.id:", socket.id, "userId:", userData._id)
-      socket.emit("identity", userData._id)
-      // Re-fetch from DB so missed notifications are recovered
+    const sendIdentity = () => {
+      console.log(`[SOCKET] Registering identity for DeliveryBoy ID: ${userData._id}`)
+      socket.emit("identity", { userId: userData._id, role: "deliveryBoy" })
       fetchAssignments()
       fetchCurrentOrder()
     }
 
-    // Handle real-time new-assignment push
     const handleNewAssignment = (assignment: any) => {
-      console.log("[DELIVERY-BOY] new-assignment received:", assignment?._id)
-      mergeAssignments([assignment])
+      console.log(`[SOCKET] Real-time new-assignment received for DeliveryBoy ID: ${userData._id}`, assignment)
+      if (assignment) {
+        mergeAssignments([assignment])
+        triggerAlert(assignment, "New Delivery Assignment Available!")
+        setCurrentView('assignments')
+      }
+      fetchAssignments()
+      fetchCurrentOrder()
     }
 
-    // If already connected, send identity immediately
+    const handleNewOrder = (orderData: any) => {
+      console.log("[SOCKET] Real-time new-order received")
+      playNotificationSound()
+      fetchAssignments()
+    }
+
+    const handleOrderAssigned = (data: any) => {
+      console.log("[SOCKET] Real-time order-assigned received")
+      fetchAssignments()
+      fetchCurrentOrder()
+    }
+
+    const handleStatusUpdate = (data: any) => {
+      console.log("[SOCKET] Real-time order-status-update received")
+      fetchAssignments()
+      fetchCurrentOrder()
+    }
+
     if (socket.connected) {
-      console.log("[SOCKET] Already connected, sending identity:", userData._id)
-      socket.emit("identity", userData._id)
+      sendIdentity()
     }
 
-    socket.on("connect", onConnect)
+    socket.on("connect", sendIdentity)
     socket.on("new-assignment", handleNewAssignment)
+    socket.on("new-order", handleNewOrder)
+    socket.on("order-assigned", handleOrderAssigned)
+    socket.on("order-status-update", handleStatusUpdate)
 
     return () => {
-      socket.off("connect", onConnect)
+      socket.off("connect", sendIdentity)
       socket.off("new-assignment", handleNewAssignment)
+      socket.off("new-order", handleNewOrder)
+      socket.off("order-assigned", handleOrderAssigned)
+      socket.off("order-status-update", handleStatusUpdate)
     }
+  }, [userData?._id, fetchAssignments, fetchCurrentOrder, playNotificationSound, mergeAssignments])
+
+  // 10-second background polling heartbeat (zero-miss fallback for mobile/Vercel)
+  useEffect(() => {
+    if (!userData?._id) return
+    const interval = setInterval(() => {
+      fetchAssignments()
+      fetchCurrentOrder()
+    }, 10000)
+    return () => clearInterval(interval)
   }, [userData?._id, fetchAssignments, fetchCurrentOrder])
 
   // Geolocation updates
@@ -193,10 +356,10 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
   const handleAccept = async (id: string) => {
     try {
       await axios.get(`/api/delivery/assignment/${id}/accept-assignment`)
-      setAssignments((prev) => prev.filter((a) => String(a._id) !== String(id)))
+      setAssignments((prev) => (Array.isArray(prev) ? prev : []).filter((a) => String(a._id) !== String(id)))
       await fetchCurrentOrder()
     } catch (error) {
-      console.log(error)
+      console.error("Accept assignment error:", error)
     }
   }
 
@@ -229,7 +392,6 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     try {
       const result = await axios.post("/api/delivery/otp/verify", { orderId: activeOrder.order._id, otp: otp.trim() })
       console.log(result.data)
-      // Update active order state to completed without page reload
       setActiveOrder((prev: any) => prev ? {
         ...prev,
         order: {
@@ -257,50 +419,8 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     setOtp("")
     setOtpError("")
     setOtpSuccessMessage("")
+    setCurrentView('assignments')
     await fetchAssignments()
-  }
-
-  if (!activeOrder && assignments.length === 0) {
-    const todayEarning = [
-      {
-        name: "Today",
-        earnings: earning,
-        deliveries: earning / 40
-      }
-    ]
-    return (
-      <div className='flex items-center justify-center min-h-screen bg-linear-to-br from-white to-green-50 p-6 pt-[100px]'>
-        <div className='max-w-md w-full text-center'>
-          <h2 className='text-2xl font-bold text-gray-800'>No Active Deliveries 🚛</h2>
-          <p className='text-gray-500 mb-5'>Stay online to receive new orders</p>
-
-          <div className='bg-white border rounded-xl shadow-xl p-6'>
-            <h2 className='font-medium text-green-700 mb-2'>Today's Performance</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={todayEarning}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="earnings" name="Earnings (₹)" fill="#16a34a" />
-                <Bar dataKey="deliveries" name="Deliveries" fill="#2563eb" />
-              </BarChart>
-            </ResponsiveContainer>
-
-            <p className='mt-4 text-lg font-bold text-green-700'>₹{earning || 0} Earned today</p>
-            <button
-              className='mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium transition'
-              onClick={() => {
-                fetchAssignments()
-                fetchCurrentOrder()
-              }}
-            >
-              Refresh Earnings & Orders
-            </button>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   if (activeOrder && userLocation) {
@@ -315,11 +435,11 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
               <h1 className='text-xl sm:text-2xl font-bold text-green-700 dark:text-green-400'>
                 {isCompleted ? "Delivery Completed" : "Active Delivery"}
               </h1>
-              <p className='text-gray-600 dark:text-gray-400 text-xs sm:text-sm mt-0.5'>Order #{activeOrder.order._id.slice(-6)}</p>
+              <p className='text-gray-600 dark:text-gray-400 text-xs sm:text-sm mt-0.5'>Order #{String(activeOrder.order._id).slice(-6)}</p>
             </div>
             <button
               onClick={handleBackToDashboard}
-              className='px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 text-gray-800 dark:text-gray-100 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 border border-gray-200 dark:border-gray-600'
+              className='px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 text-gray-800 dark:text-gray-100 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 border border-gray-200 dark:border-gray-600 cursor-pointer'
             >
               <ArrowLeft size={16} />
               <span>Back to Orders</span>
@@ -342,7 +462,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
                     <button
                       onClick={sendOtp}
                       disabled={sendOtpLoading}
-                      className='w-full py-4 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-center text-white font-semibold rounded-lg transition flex items-center justify-center gap-2 text-base shadow-xs'
+                      className='w-full py-4 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-center text-white font-semibold rounded-lg transition flex items-center justify-center gap-2 text-base shadow-xs cursor-pointer'
                     >
                       {sendOtpLoading ? (
                         <>
@@ -373,7 +493,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
                       value={otp}
                     />
                     <button
-                      className='w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white py-3 text-center rounded-lg font-semibold transition flex items-center justify-center gap-2'
+                      className='w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white py-3 text-center rounded-lg font-semibold transition flex items-center justify-center gap-2 cursor-pointer'
                       disabled={verifyOtpLoading}
                       onClick={verifyOtp}
                     >
@@ -391,7 +511,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
                       type='button'
                       onClick={sendOtp}
                       disabled={sendOtpLoading}
-                      className='w-full text-xs text-blue-600 hover:underline text-center mt-1'
+                      className='w-full text-xs text-blue-600 hover:underline text-center mt-1 cursor-pointer'
                     >
                       {sendOtpLoading ? "Resending OTP..." : "Resend OTP"}
                     </button>
@@ -405,12 +525,12 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
                     </div>
                     <div className='text-green-800 dark:text-green-300 font-bold text-xl'>Delivery Completed!</div>
                     <p className='text-gray-600 dark:text-gray-400 text-sm max-w-sm mx-auto'>
-                      Order #{activeOrder.order._id.slice(-6)} has been successfully verified and completed.
+                      Order #{String(activeOrder.order._id).slice(-6)} has been successfully verified and completed.
                     </p>
                     <div className='pt-2 flex flex-col gap-2'>
                       <button
                         onClick={handleBackToDashboard}
-                        className='w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition shadow flex items-center justify-center gap-2'
+                        className='w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition shadow flex items-center justify-center gap-2 cursor-pointer'
                       >
                         <span>Back to Orders / Go to Dashboard</span>
                       </button>
@@ -425,47 +545,190 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     )
   }
 
+  const todayEarningData = [
+    {
+      name: "Today",
+      earnings: earning || 0,
+      deliveries: Math.max(0, Math.floor((earning || 0) / 40))
+    }
+  ]
+
+  const safeAssignments = Array.isArray(assignments) ? assignments : []
+
   return (
-    <div className='w-full min-h-screen bg-gray-50 dark:bg-gray-900 p-4 pt-[100px] pb-16'>
+    <div className='w-full min-h-screen bg-gray-50 dark:bg-gray-900 p-4 pt-[100px] pb-16 relative'>
+      {notificationToast?.show && (
+        <div className='fixed top-24 right-4 z-999 max-w-md w-full bg-linear-to-r from-green-600 to-green-700 text-white p-4 rounded-2xl shadow-2xl border border-green-400 flex items-center justify-between animate-bounce'>
+          <div className='flex items-center gap-3'>
+            <div className='p-2 bg-white/20 rounded-xl'>
+              <Bell className='w-6 h-6 text-white animate-pulse' />
+            </div>
+            <div>
+              <div className='font-bold text-sm sm:text-base flex items-center gap-1.5'>
+                <span>Realtime Order Alert</span>
+                <Volume2 className='w-4 h-4' />
+              </div>
+              <div className='text-xs sm:text-sm text-green-100'>{notificationToast.message}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setNotificationToast(null)}
+            className='text-xs bg-white text-green-800 font-bold px-3 py-1.5 rounded-xl hover:bg-green-100 transition shadow-xs cursor-pointer'
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto">
-        <div className='flex items-center justify-between mb-6'>
-          <h2 className='text-2xl font-bold text-gray-800 dark:text-gray-100'>Delivery Assignments</h2>
+        {/* Navigation Tabs Header */}
+        <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-xs'>
+          <div className='flex items-center gap-2'>
+            <button
+              onClick={() => setCurrentView('assignments')}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition cursor-pointer flex items-center gap-2 ${
+                currentView === 'assignments'
+                  ? 'bg-green-600 text-white shadow-xs'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span>🚚 Delivery Assignments</span>
+              {safeAssignments.length > 0 && (
+                <span className='px-2 py-0.5 text-xs bg-white text-green-800 font-bold rounded-full'>
+                  {safeAssignments.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setCurrentView('earnings')}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                currentView === 'earnings'
+                  ? 'bg-green-600 text-white shadow-xs'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span>📊 Earnings & Graph</span>
+            </button>
+          </div>
+
           <button
             onClick={() => {
               fetchAssignments()
               fetchCurrentOrder()
             }}
-            className='px-3.5 py-2 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-semibold rounded-lg transition'
+            className='px-3.5 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold rounded-lg transition border border-gray-200 dark:border-gray-600 cursor-pointer'
           >
             Refresh List
           </button>
         </div>
 
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-          {assignments.map((a, index) => (
-            <div key={a._id || index} className='p-5 bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-100 dark:border-gray-700 hover:shadow-md transition flex flex-col justify-between'>
-              <div>
-                <p className='dark:text-gray-200'><b>Order Id </b> #{a?.order?._id?.slice(-6)}</p>
-                <p className='text-gray-600 dark:text-gray-400 mt-2 text-sm'>{a?.order?.address?.fullAddress}</p>
-              </div>
+        {currentView === 'earnings' ? (
+          <div className='max-w-md mx-auto text-center py-6'>
+            <h2 className='text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1'>Today's Performance 📈</h2>
+            <p className='text-gray-500 dark:text-gray-400 mb-6 text-sm'>Track your daily earnings and completed deliveries</p>
 
-              <div className='flex gap-3 mt-6'>
-                <button
-                  className='flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold transition text-sm'
-                  onClick={() => handleAccept(a._id)}
-                >
-                  Accept
-                </button>
-                <button
-                  className='flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-semibold transition text-sm'
-                  onClick={() => setAssignments(prev => prev.filter(item => item._id !== a._id))}
-                >
-                  Reject
-                </button>
-              </div>
+            <div className='bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl p-6'>
+              <h2 className='font-semibold text-green-700 dark:text-green-400 mb-4'>Earnings Breakdown</h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={todayEarningData}>
+                  <XAxis dataKey="name" stroke="#888888" />
+                  <YAxis stroke="#888888" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="earnings" name="Earnings (₹)" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="deliveries" name="Deliveries" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              <p className='mt-6 text-xl font-extrabold text-green-700 dark:text-green-400'>
+                ₹{earning || 0} Earned today
+              </p>
+
+              <button
+                className='mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold transition cursor-pointer shadow-xs'
+                onClick={() => {
+                  fetchAssignments()
+                  fetchCurrentOrder()
+                }}
+              >
+                Refresh Earnings & Orders
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div>
+            {safeAssignments.length === 0 ? (
+              <div className='max-w-md mx-auto text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-md p-8'>
+                <div className='w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mx-auto text-3xl mb-4'>
+                  🚛
+                </div>
+                <h3 className='text-xl font-bold text-gray-800 dark:text-gray-100 mb-2'>No Active Deliveries</h3>
+                <p className='text-gray-500 dark:text-gray-400 text-sm mb-6'>
+                  Stay online to receive new order assignments in real time!
+                </p>
+                <div className='flex gap-3 justify-center'>
+                  <button
+                    onClick={() => {
+                      fetchAssignments()
+                      fetchCurrentOrder()
+                    }}
+                    className='px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition cursor-pointer'
+                  >
+                    Check for New Orders
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('earnings')}
+                    className='px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold rounded-lg transition cursor-pointer'
+                  >
+                    View Earnings
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+                {safeAssignments.map((a, index) => {
+                  const orderObj = a?.order && typeof a.order === 'object' ? a.order : null
+                  const orderIdStr = orderObj?._id ? String(orderObj._id) : (a?._id ? String(a._id) : '')
+                  const displayOrderId = orderIdStr ? orderIdStr.slice(-6) : 'N/A'
+                  const fullAddress = orderObj?.address?.fullAddress || a?.address?.fullAddress || "Address details available upon accepting"
+
+                  return (
+                    <div key={a?._id || index} className='p-5 bg-white dark:bg-gray-800 rounded-2xl shadow-md border border-gray-100 dark:border-gray-700 hover:shadow-lg transition flex flex-col justify-between'>
+                      <div>
+                        <div className='flex items-center justify-between mb-3'>
+                          <span className='px-2.5 py-1 bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-xs font-bold rounded-md'>
+                            Order #{displayOrderId}
+                          </span>
+                          <span className='text-xs text-gray-500 dark:text-gray-400 font-medium'>
+                            Out for delivery
+                          </span>
+                        </div>
+                        <p className='text-gray-700 dark:text-gray-300 mt-2 text-sm leading-relaxed'>
+                          <b>Delivery Address:</b> {fullAddress}
+                        </p>
+                      </div>
+
+                      <div className='flex gap-3 mt-6'>
+                        <button
+                          className='flex-1 bg-green-600 hover:bg-green-700 active:scale-95 text-white py-2.5 rounded-xl font-bold transition text-sm shadow-xs cursor-pointer'
+                          onClick={() => a?._id && handleAccept(String(a._id))}
+                        >
+                          Accept Delivery
+                        </button>
+                        <button
+                          className='flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 text-gray-600 dark:text-gray-300 py-2.5 rounded-xl font-semibold transition text-sm border border-gray-200 dark:border-gray-600 cursor-pointer'
+                          onClick={() => a?._id && setAssignments(prev => (Array.isArray(prev) ? prev : []).filter(item => String(item?._id) !== String(a._id)))}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

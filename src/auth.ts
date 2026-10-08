@@ -24,13 +24,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         credentials: {
         email: { label: "email",type:"email" },
         password: { label: "Password", type: "password" },
+        role: { label: "Role", type: "text" },
       } ,
      async authorize(credentials) {
           try {
             await connectDb()
-            const email = credentials.email as string
+            const email = (credentials.email as string || "").toLowerCase().trim()
             const password = credentials.password as string
-            const user = await User.findOne({ email })
+            const role = credentials.role as string | undefined
+
+            const safeRegex = new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i")
+            const query: any = { email: safeRegex }
+            if (role) {
+              query.role = role
+            }
+
+            let user = await User.findOne(query)
+
+            // Fallback if requested role was not found directly
+            if (!user && role) {
+              user = await User.findOne({ email: safeRegex })
+            }
+
             if (!user) {
                 throw new Error("user does not exist")
             }
@@ -101,9 +116,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.email = user.email
             token.role = user.role
         }
-        // On session.update() call (e.g. after role selection in EditRoleMobile)
-        if (trigger === "update" && session?.role) {
-          token.role = session.role
+        // On session.update() call (e.g. after role selection or role switch)
+        if (trigger === "update") {
+          if (session?.role) {
+            token.role = session.role
+          }
+          if (session?.id) {
+            token.id = session.id
+          }
         }
         return token
     },

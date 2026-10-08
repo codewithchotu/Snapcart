@@ -1,15 +1,16 @@
 'use client'
-import { Boxes, ClipboardCheck, Cross, LogOut, Menu, Package, Plus, PlusCircle, Search, ShoppingCartIcon, User, X } from 'lucide-react'
+import { Boxes, ClipboardCheck, Cross, LogOut, Menu, Package, Plus, PlusCircle, RefreshCw, Search, ShoppingCartIcon, User, UserCog, Bike, X } from 'lucide-react'
 
 import Link from 'next/link'
 import React, { FormEvent, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { AnimatePresence, motion } from 'motion/react'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { createPortal } from 'react-dom'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/redux/store'
 import { useRouter } from 'next/navigation'
+import axios from 'axios'
 import ThemeToggle from './ThemeToggle'
 
 interface IUser {
@@ -21,6 +22,7 @@ interface IUser {
     role: "user" | "deliveryBoy" | "admin"
     image?: string
 }
+
 function Nav({ user }: { user: IUser }) {
     const [open, setOpen] = useState(false)
     const profileDropDown = useRef<HTMLDivElement>(null)
@@ -28,7 +30,11 @@ function Nav({ user }: { user: IUser }) {
     const [menuOpen, setMenuOpen] = useState(false)
     const {cartData}=useSelector((state:RootState)=>state.cart)
     const [search,setSearch]=useState("")
+    const [availableRoles, setAvailableRoles] = useState<string[]>([])
+    const [switchingRole, setSwitchingRole] = useState(false)
     const router=useRouter()
+    const { update } = useSession()
+
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (profileDropDown.current && !profileDropDown.current.contains(e.target as Node)) {
@@ -38,6 +44,36 @@ function Nav({ user }: { user: IUser }) {
         document.addEventListener("mousedown", handleClickOutside)
         return () => document.removeEventListener("mousedown", handleClickOutside)
     }, [])
+
+    useEffect(() => {
+        if (user?.email) {
+            axios.post('/api/auth/check-roles', { email: user.email })
+                .then(res => {
+                    if (res.data?.roles) {
+                        setAvailableRoles(res.data.roles)
+                    }
+                })
+                .catch(err => console.error("Error fetching user roles:", err))
+        }
+    }, [user?.email])
+
+    const handleSwitchRole = async (targetRole: string) => {
+        if (targetRole === user.role || switchingRole) return
+        setSwitchingRole(true)
+        try {
+            const res = await axios.post('/api/auth/switch-role', { targetRole })
+            if (res.data?.success && res.data?.user) {
+                await update({ id: res.data.user.id, role: res.data.user.role })
+                setOpen(false)
+                router.push('/')
+                router.refresh()
+            }
+        } catch (error) {
+            console.error("Failed to switch role:", error)
+        } finally {
+            setSwitchingRole(false)
+        }
+    }
 
 
 
@@ -163,13 +199,41 @@ setSearchBarOpen(false)
                                     </div>
                                     <div>
                                         <div className='text-gray-800 dark:text-gray-100 font-semibold'>{user.name}</div>
-                                        <div className='text-xs text-gray-500 dark:text-gray-400 capitalize'>{user.role}</div>
+                                        <div className='text-xs text-gray-500 dark:text-gray-400 capitalize flex items-center gap-1'>
+                                          Role: <span className='font-semibold text-green-600 dark:text-green-400'>{user.role}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 {user.role == "user" && <Link href={"/user/my-orders"} className='flex items-center gap-2 px-3 py-3 hover:bg-green-50 dark:hover:bg-gray-700 rounded-lg text-gray-700 dark:text-gray-200 font-medium' onClick={() => setOpen(false)}>
                                     <Package className='w-5 h-5 text-green-600' />
                                     My Orders
                                 </Link>}
+
+                                {availableRoles.length > 1 && (
+                                    <div className='py-2 border-t border-b border-gray-100 dark:border-gray-700 my-1'>
+                                        <div className='px-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1'>
+                                            <RefreshCw className='w-3 h-3' /> Switch Account Role
+                                        </div>
+                                        {availableRoles.map((roleOption) => {
+                                            const isActive = roleOption === user.role
+                                            return (
+                                                <button
+                                                    key={roleOption}
+                                                    disabled={isActive || switchingRole}
+                                                    onClick={() => handleSwitchRole(roleOption)}
+                                                    className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg transition-all ${
+                                                        isActive
+                                                            ? "bg-green-100 dark:bg-green-900/40 font-bold text-green-700 dark:text-green-300"
+                                                            : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                                                    }`}
+                                                >
+                                                    <span className='capitalize font-medium'>{roleOption}</span>
+                                                    {isActive && <span className='text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full'>Active</span>}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                )}
 
                                 <button className='flex items-center gap-2 w-full text-left px-3 py-3 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-gray-700 dark:text-gray-200 font-medium' onClick={() => {
                                     setOpen(false)

@@ -6,17 +6,26 @@ import { NextResponse } from "next/server";
 export async function GET() {
     try {
        await connectDb()
-       const session=await auth()
-        const assignments=await DeliveryAssignment.find({
-          brodcastedTo:session?.user?.id,
-          status:"brodcasted"
-        }).populate("order")
-        return NextResponse.json(
-            assignments,{status:200}
-        )
+       const session = await auth()
+       if (!session?.user?.id) {
+           return NextResponse.json([], { status: 200 })
+       }
+
+       // Fetch all broadcasted assignments
+       const assignments = await DeliveryAssignment.find({
+           status: "brodcasted"
+       }).populate("order").sort({ createdAt: -1 })
+       
+       const validAssignments = Array.isArray(assignments) 
+           ? assignments.filter((a: any) => a && a.order)
+           : []
+
+       return NextResponse.json(
+           validAssignments,
+           { status: 200 }
+       )
     } catch (error) {
-        return NextResponse.json(
-           {message:`get assignments error ${error}`},{status:200}
-        )
+        console.error("get-assignments error:", error)
+        return NextResponse.json([], { status: 500 })
     }
 }

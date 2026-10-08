@@ -14,15 +14,38 @@ export async function GET(req: NextRequest) {
             )
         }
 
-        const user = await User.findOne({ email: session.user.email }).select("-password")
+        let user = null
+        if (session.user.id) {
+            user = await User.findById(session.user.id).select("-password")
+        }
+        if (!user && session.user.email) {
+            const normalizedEmail = session.user.email.toLowerCase().trim()
+            const safeRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i")
+            if (session.user.role) {
+                user = await User.findOne({ email: safeRegex, role: session.user.role }).select("-password")
+            }
+            if (!user) {
+                user = await User.findOne({ email: safeRegex }).select("-password")
+            }
+        }
+
         if (!user) {
             return NextResponse.json(
                 { message: "user not found" },
                 { status: 400 }
             )
         }
+
+        const normalizedEmail = user.email.toLowerCase().trim()
+        const safeRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i")
+        const allAccounts = await User.find({ email: safeRegex }).select("role _id name")
+        const availableRoles = Array.from(new Set(allAccounts.map(a => a.role)))
+
+        const userObj = user.toObject()
+        userObj.availableRoles = availableRoles
+
         return NextResponse.json(
-            user,
+            userObj,
             { status: 200 }
         )
 

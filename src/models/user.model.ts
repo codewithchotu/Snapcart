@@ -32,7 +32,6 @@ name:{
 },
 email:{
     type:String,
-    unique:true,
     required:true
 },
 password:{
@@ -75,6 +74,8 @@ isOnline:{
 
 userSchema.index({ location: "2dsphere" })
 userSchema.index({ role: 1, isOnline: 1 })
+userSchema.index({ email: 1 })
+userSchema.index({ email: 1, role: 1 })
 
 const User=mongoose.models.User || mongoose.model("User",userSchema)
 export default User

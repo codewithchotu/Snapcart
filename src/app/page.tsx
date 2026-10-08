@@ -28,8 +28,22 @@ const searchParams=await props.searchParams
   const session = await auth()
   if (!session) redirect("/login")
   console.log(session?.user)
-  const user = await User.findById(session?.user?.id)
- if (!user) redirect("/login")
+  let user = null
+  if (session?.user?.id) {
+    user = await User.findById(session.user.id)
+  }
+  if (!user && session?.user?.email) {
+    const normalizedEmail = session.user.email.toLowerCase().trim()
+    const safeRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i")
+    if (session.user.role) {
+      user = await User.findOne({ email: safeRegex, role: session.user.role })
+    }
+    if (!user) {
+      user = await User.findOne({ email: safeRegex })
+    }
+  }
+
+  if (!user) redirect("/login")
 
   const inComplete = !user.mobile || !user.role || (!user.mobile && user.role == "user")
   if (inComplete) {

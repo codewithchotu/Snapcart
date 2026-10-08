@@ -9,17 +9,20 @@ export async function GET(req:NextRequest) {
         const session = await auth()
         if (!session || session?.user?.role !== "admin") {
           return NextResponse.json(
-            { message: "You are not authorized as admin" },
+            [],
             { status: 403 }
           )
         }
         const orders=await Order.find({}).populate("user assignedDeliveryBoy").sort({createdAt:-1})
         return NextResponse.json(
-            orders,{status:200}
+            Array.isArray(orders) ? orders : [],
+            {status:200}
         )
     } catch (error) {
+         console.error("admin get-orders error:", error)
          return NextResponse.json(
-            {message:`get orders error: ${error}`},{status:500}
+            [],
+            {status:500}
         )
     }
 }

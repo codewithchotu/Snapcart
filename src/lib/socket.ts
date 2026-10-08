@@ -7,11 +7,13 @@ export const getSocket = (): Socket => {
         const rawUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER || "https://snapcart-socket-server-28r1.onrender.com"
         const socketUrl = rawUrl.replace(/\/+$/, '')
         socket = io(socketUrl, {
-            transports: ["websocket", "polling"],
+            transports: ["polling", "websocket"],
             autoConnect: true,
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
         })
 
         socket.on("connect", () => {
@@ -20,6 +22,9 @@ export const getSocket = (): Socket => {
 
         socket.on("disconnect", (reason) => {
             console.log("[SOCKET] Disconnected, reason:", reason)
+            if (reason === "io server disconnect" || reason === "transport close") {
+                socket?.connect()
+            }
         })
 
         socket.on("connect_error", (error) => {
@@ -30,4 +35,4 @@ export const getSocket = (): Socket => {
         socket.connect()
     }
     return socket
-}
+}

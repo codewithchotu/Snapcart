@@ -28,7 +28,6 @@ const NEXT_BASE_URL = (process.env.NEXT_BASE_URL || "https://snapcart-two-gamma.
 const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
-            // Allow all requests to ensure socket connectivity across environments
             callback(null, true)
         },
         credentials: true,
@@ -43,62 +42,89 @@ const socketUser = new Map()  // socketId (string) -> userId (string)
 io.on("connection", (socket) => {
     console.log("[SOCKET-SERVER] New socket connected with id:", socket.id)
 
-    socket.on("identity", async (userId) => {
+    socket.on("identity", (data) => {
         try {
-            console.log("[SOCKET-SERVER] Identity received for userId:", userId, "with socket.id:", socket.id)
+            const userId = typeof data === 'object' && data !== null ? data.userId : data
+            const role = typeof data === 'object' && data !== null ? data.role : null
+            if (!userId) return
 
             const uid = String(userId)
+            console.log("[SOCKET-SERVER] Identity registered for userId:", uid, "role:", role || "N/A", "socket.id:", socket.id)
+
             if (!userSockets.has(uid)) {
                 userSockets.set(uid, new Set())
             }
             userSockets.get(uid).add(socket.id)
             socketUser.set(socket.id, uid)
+            
+            // Join user-specific room
             socket.join(uid)
 
-            const response = await axios.post(
-                `${NEXT_BASE_URL}/api/socket/connect`,
-                {
-                    userId,
-                    socketId: socket.id
-                },
-                { timeout: 8000 }
-            )
+            // Join delivery-boys room for instant broadcasts
+            if (role === "deliveryBoy" || role === "delivery_boy" || role === "delivery") {
+                socket.join("delivery-boys")
+                console.log(`[SOCKET-SERVER] Socket ${socket.id} joined 'delivery-boys' room`)
+            }
 
-            console.log("[SOCKET-SERVER] Connect API response for userId:", userId, response.data)
+            // Asynchronous DB sync (non-blocking for 0ms latency)
+            axios.post(
+                `${NEXT_BASE_URL}/api/socket/connect`,
+                { userId: uid, socketId: socket.id },
+                { timeout: 5000 }
+            ).then((res) => {
+                console.log("[SOCKET-SERVER] Async DB connect sync completed for userId:", uid)
+            }).catch((error) => {
+                console.error("[SOCKET-SERVER] Async DB connect sync warning:", error?.message || error)
+            })
+
         } catch (error) {
-            console.error("[SOCKET-SERVER] Connect API failed for userId:", userId, error?.response?.data || error?.message)
+            console.error("[SOCKET-SERVER] Identity handling error:", error?.message)
         }
     })
 
-    socket.on("update-location", async ({ userId, latitude, longitude }) => {
+    socket.on("update-location", (payload) => {
         try {
+            const { userId, latitude, longitude } = payload || {}
+            if (!userId || latitude === undefined || longitude === undefined) return
+
             const location = {
                 type: "Point",
                 coordinates: [Number(longitude), Number(latitude)]
             }
-            await axios.post(
+            
+            // Immediately broadcast location update
+            io.emit("update-deliveryBoy-location", { userId, location })
+
+            // Asynchronous DB update (non-blocking)
+            axios.post(
                 `${NEXT_BASE_URL}/api/socket/update-location`,
                 { userId, location },
-                { timeout: 8000 }
-            )
-            io.emit("update-deliveryBoy-location", { userId, location })
+                { timeout: 5000 }
+            ).catch((err) => {
+                console.error("[SOCKET-SERVER] update-location DB sync warning:", err?.message)
+            })
+
         } catch (error) {
-            console.error("[SOCKET-SERVER] update-location failed:", error?.message)
+            console.error("[SOCKET-SERVER] update-location error:", error?.message)
         }
     })
 
     socket.on("join-room", (roomId) => {
+        if (!roomId) return
         console.log("[SOCKET-SERVER] Socket", socket.id, "joined room:", roomId)
-        socket.join(roomId)
+        socket.join(String(roomId))
     })
 
-    socket.on("send-message", async (message) => {
+    socket.on("send-message", (message) => {
         try {
-            console.log("[SOCKET-SERVER] Chat message:", message?.roomId)
-            await axios.post(`${NEXT_BASE_URL}/api/chat/save`, message, { timeout: 8000 })
+            if (!message?.roomId) return
+            console.log("[SOCKET-SERVER] Chat message for room:", message.roomId)
             io.to(message.roomId).emit("send-message", message)
+
+            axios.post(`${NEXT_BASE_URL}/api/chat/save`, message, { timeout: 5000 })
+                .catch((err) => console.error("[SOCKET-SERVER] Save chat error:", err?.message))
         } catch (error) {
-            console.error("[SOCKET-SERVER] send-message failed:", error?.message)
+            console.error("[SOCKET-SERVER] send-message error:", error?.message)
         }
     })
 
@@ -117,39 +143,38 @@ io.on("connection", (socket) => {
 
 const handleNotify = (req, res) => {
     const { event, data, socketId, userId } = req.body
-    console.log("[NOTIFY] Received notify request:", {
-        event,
-        targetSocketId: socketId || "N/A",
-        targetUserId: userId || "N/A"
-    })
+    const assignmentId = data?._id || data?.assignment?._id || "N/A"
+    console.log(`[NOTIFY] Event: '${event}', Selected DeliveryBoy ID: ${userId || 'N/A'}, Socket ID: ${socketId || 'N/A'}, Assignment ID: ${assignmentId}`)
 
-    let emitted = false
+    let emittedCount = 0
 
-    // 1. If socketId provided, emit to specific socket
+    // 1. Emit directly to specific socket if provided
     if (socketId) {
         io.to(socketId).emit(event, data)
-        console.log(`[NOTIFY] Emitted event '${event}' directly to socketId: ${socketId}`)
-        emitted = true
+        emittedCount++
     }
 
-    // 2. If userId provided, emit to user's room and any mapped sockets
+    // 2. Emit to user room (userId) and mapped socket IDs
     if (userId) {
         const uid = String(userId)
         io.to(uid).emit(event, data)
         const mappedSockets = userSockets.get(uid)
         if (mappedSockets && mappedSockets.size > 0) {
             mappedSockets.forEach((sid) => io.to(sid).emit(event, data))
-            console.log(`[NOTIFY] Emitted event '${event}' to ${mappedSockets.size} active socket(s) for userId: ${uid}`)
-        } else {
-            console.log(`[NOTIFY] Emitted event '${event}' to room for userId: ${uid}`)
         }
-        emitted = true
+        emittedCount++
     }
 
-    // 3. Fallback: broadcast to all sockets
-    if (!emitted) {
+    // 3. For new assignments / new orders, broadcast to delivery-boys room and all sockets
+    if (event === "new-assignment" || event === "new-order" || event === "order-assigned") {
+        io.to("delivery-boys").emit(event, data)
+        io.emit(event, data) // Fallback global broadcast so no delivery boy ever misses an assignment
+        emittedCount++
+    }
+
+    // 4. Fallback if not handled
+    if (emittedCount === 0) {
         io.emit(event, data)
-        console.log(`[NOTIFY] Broadcasted event '${event}' to all sockets`)
     }
 
     return res.status(200).json({ success: true, emitted: true })

@@ -2,7 +2,7 @@ import connectDb from "@/lib/db"
 import Order from "@/models/order.model"
 import { NextRequest, NextResponse } from "next/server"
 
-export async function GET(req:NextRequest,context: { params: Promise<{ orderId: string; }>; }) {
+export async function GET(req:NextRequest, context: any) {
     try {
         await connectDb()
         const {orderId}=await context.params

@@ -9,9 +9,25 @@ export async function POST(req:NextRequest){
        await connectDb()
        const {role,mobile}=await req.json() 
        const session=await auth()
-       const user=await User.findOneAndUpdate({email:session?.user?.email},{
-        role,mobile
-       },{new:true})
+       if (!session?.user?.email) {
+           return NextResponse.json({ message: "unauthorized" }, { status: 401 })
+       }
+       let user = null
+       if (session?.user?.id) {
+          user = await User.findByIdAndUpdate(
+            session.user.id,
+            { role, mobile },
+            { new: true }
+          )
+       }
+       if (!user && session?.user?.email) {
+          const normalizedEmail = session.user.email.toLowerCase().trim()
+          user = await User.findOneAndUpdate(
+            { email: { $regex: new RegExp(`^${normalizedEmail}$`, "i") } },
+            { role, mobile },
+            { new: true }
+          )
+       }
        if(!user){
         return NextResponse.json(
             {message:"user not found"},

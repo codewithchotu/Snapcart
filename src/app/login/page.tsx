@@ -1,7 +1,7 @@
 'use client'
-import { ArrowLeft, EyeIcon, EyeOff, Key, Leaf, Loader2, Lock, LogIn, Mail, User } from 'lucide-react'
+import { ArrowLeft, Bike, EyeIcon, EyeOff, Key, Leaf, Loader2, Lock, LogIn, Mail, User, UserCog, ShieldCheck } from 'lucide-react'
 import React, { FormEvent, useState } from 'react'
-import {motion} from "motion/react"
+import { motion, AnimatePresence } from 'motion/react'
 import Image from 'next/image'
 import googleImage from "@/assets/google.png"
 import axios from 'axios'
@@ -9,28 +9,73 @@ import { useRouter } from 'next/navigation'
 import { signIn, useSession } from 'next-auth/react'
 
 function Login() {
-   
-    const [email,setEmail]=useState("")
-    const [password,setPassword]=useState("")
-    const [showPassword,setShowPassword]=useState(false)
-    const [loading,setLoading]=useState(false)
-    const [googleLoading,setGoogleLoading]=useState(false)
-    const router=useRouter()
-    const session=useSession()
-    console.log(session)
-    const handleLogin=async (e:FormEvent)=>{
+    const [email, setEmail] = useState("")
+    const [password, setPassword] = useState("")
+    const [showPassword, setShowPassword] = useState(false)
+    const [loading, setLoading] = useState(false)
+    const [googleLoading, setGoogleLoading] = useState(false)
+    const [errorMsg, setErrorMsg] = useState("")
+    
+    // Multi-role selection prompt state
+    const [availableRoles, setAvailableRoles] = useState<string[]>([])
+    const [showRoleModal, setShowRoleModal] = useState(false)
+
+    const router = useRouter()
+    const session = useSession()
+
+    const executeLogin = async (roleToUse?: string) => {
+      setLoading(true)
+      setErrorMsg("")
+      try {
+        const res = await signIn("credentials", {
+          email,
+          password,
+          role: roleToUse,
+          redirect: false
+        })
+
+        if (res?.error) {
+          setErrorMsg(res.error.replace("Error: ", ""))
+          setLoading(false)
+          setShowRoleModal(false)
+        } else {
+          router.push("/")
+          router.refresh()
+        }
+      } catch (error: any) {
+        console.error("Login error:", error)
+        setErrorMsg("Failed to sign in. Please try again.")
+        setLoading(false)
+        setShowRoleModal(false)
+      }
+    }
+
+    const handleLogin = async (e: FormEvent) => {
         e.preventDefault()
         setLoading(true)
-try {
-   await signIn("credentials",{
-    email,password
-   }) 
-  
-   setLoading(false)
-} catch (error) {
-    console.log(error)
-    setLoading(false)
-}
+        setErrorMsg("")
+        try {
+          // Check if email has multiple roles in DB
+          const checkRes = await axios.post("/api/auth/check-roles", { email })
+          if (checkRes.data?.hasMultipleRoles && checkRes.data?.roles?.length > 1) {
+            setAvailableRoles(checkRes.data.roles)
+            setShowRoleModal(true)
+            setLoading(false)
+            return
+          }
+
+          // Single account or zero existing roles found: attempt standard login
+          await executeLogin()
+        } catch (error: any) {
+          console.error("Check roles error:", error)
+          // Fallback to standard login attempt
+          await executeLogin()
+        }
+    }
+
+    const handleRoleSelect = async (role: string) => {
+      setShowRoleModal(false)
+      await executeLogin(role)
     }
 
     const handleGoogleSignIn = async () => {
@@ -42,6 +87,22 @@ try {
             console.log(error)
             setGoogleLoading(false)
         }
+    }
+
+    const getRoleLabel = (role: string) => {
+      switch (role) {
+        case 'admin': return 'Admin'
+        case 'deliveryBoy': return 'Delivery Boy'
+        case 'user': default: return 'User'
+      }
+    }
+
+    const getRoleIcon = (role: string) => {
+      switch (role) {
+        case 'admin': return <UserCog className='w-6 h-6 text-purple-600 dark:text-purple-400' />
+        case 'deliveryBoy': return <Bike className='w-6 h-6 text-orange-500 dark:text-orange-400' />
+        case 'user': default: return <User className='w-6 h-6 text-green-600 dark:text-green-400' />
+      }
     }
 
   return (
@@ -57,9 +118,15 @@ try {
           Welcome Back
         </motion.h1>
 
-        <p className='text-gray-600 dark:text-gray-400 mb-8 flex items-center gap-1.5 text-base sm:text-lg'>
+        <p className='text-gray-600 dark:text-gray-400 mb-6 flex items-center gap-1.5 text-base sm:text-lg'>
           Login To Snapcart <Leaf className='w-5 h-5 text-green-600 dark:text-green-400 inline'/>
         </p>
+
+        {errorMsg && (
+          <div className='w-full mb-4 p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl text-red-600 dark:text-red-400 text-sm font-medium text-center'>
+            {errorMsg}
+          </div>
+        )}
 
         <motion.form
           onSubmit={handleLogin}
@@ -112,10 +179,6 @@ try {
           })()}
         </motion.form>
 
-        {/* Google sign-in is OUTSIDE the credentials <form> to prevent double signIn() calls.
-            If it were inside the form, a click would fire both onClick AND onSubmit (form bubble),
-            generating two /api/auth/signin/google requests and overwriting the PKCE cookie,
-            causing "invalid_grant: Invalid code verifier" from Google. */}
         <div className='flex flex-col gap-5 w-full mt-5'>
           <div className='flex items-center gap-3 text-gray-400 dark:text-gray-600 text-xs font-semibold uppercase tracking-wider my-1'>
             <span className='flex-1 h-px bg-gray-200 dark:bg-gray-800'></span>
@@ -139,6 +202,65 @@ try {
           Want to create an account? <LogIn className='w-4 h-4'/> <span className='text-green-600 dark:text-green-400 font-semibold'>Sign Up</span>
         </p>
       </div>
+
+      {/* Multiple Roles Selection Modal */}
+      <AnimatePresence>
+        {showRoleModal && (
+          <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm'>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className='w-full max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col items-center'
+            >
+              <div className='w-14 h-14 rounded-full bg-green-100 dark:bg-green-950/60 flex items-center justify-center mb-4 text-green-600 dark:text-green-400'>
+                <ShieldCheck className='w-8 h-8' />
+              </div>
+
+              <h2 className='text-2xl font-bold text-gray-900 dark:text-gray-100 text-center mb-2'>
+                Multiple Roles Found
+              </h2>
+              <p className='text-sm text-gray-600 dark:text-gray-400 text-center mb-6'>
+                We found multiple account roles for <span className='font-semibold text-green-600 dark:text-green-400'>{email}</span>. Please select which role account you want to sign in to:
+              </p>
+
+              <div className='flex flex-col gap-3 w-full mb-6'>
+                {availableRoles.map((role) => (
+                  <button
+                    key={role}
+                    onClick={() => handleRoleSelect(role)}
+                    className='w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 hover:bg-green-50 dark:hover:bg-gray-700/80 hover:border-green-500 transition-all group cursor-pointer shadow-xs'
+                  >
+                    <div className='flex items-center gap-3.5'>
+                      <div className='p-2.5 rounded-xl bg-white dark:bg-gray-900 shadow-xs border border-gray-100 dark:border-gray-700'>
+                        {getRoleIcon(role)}
+                      </div>
+                      <div className='text-left'>
+                        <div className='font-bold text-gray-800 dark:text-gray-100 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors'>
+                          {getRoleLabel(role)}
+                        </div>
+                        <div className='text-xs text-gray-500 dark:text-gray-400 capitalize'>
+                          Sign in as {role}
+                        </div>
+                      </div>
+                    </div>
+                    <div className='text-xs font-semibold px-3 py-1.5 rounded-xl bg-green-100 dark:bg-green-950/80 text-green-700 dark:text-green-300 group-hover:bg-green-600 group-hover:text-white transition-all'>
+                      Select
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setShowRoleModal(false)}
+                className='text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors'
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

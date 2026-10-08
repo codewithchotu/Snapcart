@@ -7,13 +7,14 @@ export async function GET(req:NextRequest) {
     try {
         await connectDb()
         const session=await auth()
-        const orders=await Order.find({user:session?.user?.id}).populate("user assignedDeliveryBoy").sort({createdAt:-1})
-        if(!orders){
-            return NextResponse.json({message:"orders not found"},{status:400})
+        if (!session?.user?.id) {
+            return NextResponse.json([], { status: 200 })
         }
-        return NextResponse.json(orders,{status:200})
+        const orders=await Order.find({user:session.user.id}).populate("user assignedDeliveryBoy").sort({createdAt:-1})
+        return NextResponse.json(Array.isArray(orders) ? orders : [], {status:200})
         
     } catch (error) {
-        return NextResponse.json({message:`get all orders error:${error}`},{status:500})
+        console.error("user my-orders error:", error)
+        return NextResponse.json([], {status:500})
     }
 }

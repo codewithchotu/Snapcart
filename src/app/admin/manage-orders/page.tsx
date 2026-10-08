@@ -48,9 +48,14 @@ function ManageOrders() {
       const getOrders=async ()=>{
         try {
             const result=await axios.get("/api/admin/get-orders")
-            setOrders(result.data)
+            if (Array.isArray(result.data)) {
+                setOrders(result.data)
+            } else {
+                setOrders([])
+            }
         } catch (error) {
            console.log(error) 
+           setOrders([])
         }
       }
       getOrders()
@@ -60,12 +65,17 @@ function ManageOrders() {
     useEffect(()=>{
      const socket=getSocket()
      socket?.on("new-order",(newOrder)=>{
-      setOrders((prev)=>[newOrder,...prev!])
+      if (newOrder && typeof newOrder === 'object') {
+        setOrders((prev)=> Array.isArray(prev) ? [newOrder, ...prev] : [newOrder])
+      }
      })
      socket.on("order-assigned",({orderId,assignedDeliveryBoy})=>{
-      setOrders((prev)=>prev?.map((o)=>(
-  o._id==orderId?{...o,assignedDeliveryBoy}:o
-)))
+      setOrders((prev)=> {
+        if (!Array.isArray(prev)) return []
+        return prev.map((o)=>(
+          o._id==orderId?{...o,assignedDeliveryBoy}:o
+        ))
+      })
      })
      return ()=>{
       socket.off("new-order")

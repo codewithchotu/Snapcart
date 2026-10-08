@@ -6,7 +6,7 @@ import Order from "@/models/order.model";
 import User from "@/models/user.model";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest, context: { params: Promise<{ orderId: string; }>; }) {
+export async function POST(req: NextRequest, context: any) {
     const startTime = Date.now();
     try {
         await connectDb()
@@ -37,83 +37,77 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
         if (status === "out of delivery") {
             console.log(`[ADMIN-ORDER] Dispatching delivery assignment for orderId: ${orderId}`)
             const { latitude, longitude } = order.address || {}
-            let nearByDeliveryBoys: any[] = []
-
-            if (latitude && longitude) {
-                try {
-                    nearByDeliveryBoys = await User.find({
-                        role: "deliveryBoy",
-                        location: {
-                            $near: {
-                                $geometry: { type: "Point", coordinates: [Number(longitude), Number(latitude)] },
-                                $maxDistance: 10000
-                            }
-                        }
-                    }).lean()
-                } catch (geoErr: any) {
-                    console.warn("[ADMIN-ORDER] Geo query error, falling back to all delivery boys:", geoErr?.message || geoErr)
-                }
-            }
-
-            const nearByIds = nearByDeliveryBoys.map((b) => b._id)
+            
+            // Query all registered delivery boys across all role string variations
+            const allBoys = await User.find({
+                role: { $in: ["deliveryBoy", "delivery_boy", "delivery"] }
+            }).lean()
+            const allIds = allBoys.map(b => b._id)
+            
+            // Find busy delivery boys (currently assigned to active non-completed orders)
             const busyIds = await DeliveryAssignment.find({
-                assignedTo: { $in: nearByIds },
+                assignedTo: { $in: allIds },
                 status: { $nin: ["brodcasted", "completed"] }
             }).distinct("assignedTo")
             const busyIdSet = new Set(busyIds.map(b => String(b)))
-            let availableDeliveryBoys = nearByDeliveryBoys.filter(
-                b => !busyIdSet.has(String(b._id))
-            )
+            
+            let availableDeliveryBoys = allBoys.filter(b => !busyIdSet.has(String(b._id)))
 
-            // Fallback: If no delivery boys found within 10km radius
-            if (availableDeliveryBoys.length === 0) {
-                console.log("[ADMIN-ORDER] No nearby non-busy delivery boys found within 10km. Searching all registered delivery boys...")
-                const allBoys = await User.find({ role: "deliveryBoy" }).lean()
-                const allIds = allBoys.map(b => b._id)
-                const allBusyIds = await DeliveryAssignment.find({
-                    assignedTo: { $in: allIds },
-                    status: { $nin: ["brodcasted", "completed"] }
-                }).distinct("assignedTo")
-                const allBusySet = new Set(allBusyIds.map(b => String(b)))
-                availableDeliveryBoys = allBoys.filter(b => !allBusySet.has(String(b._id)))
-
-                // Secondary Fallback: If all delivery boys are currently marked busy, include all registered delivery boys so notification is delivered
-                if (availableDeliveryBoys.length === 0 && allBoys.length > 0) {
-                    console.log("[ADMIN-ORDER] All delivery boys are marked busy. Falling back to all registered delivery boys for dispatch.")
-                    availableDeliveryBoys = allBoys
-                }
+            // Fallback: If all delivery boys are currently marked busy, include all registered delivery boys
+            if (availableDeliveryBoys.length === 0 && allBoys.length > 0) {
+                console.log("[ADMIN-ORDER] All delivery boys marked busy, falling back to all registered delivery boys.")
+                availableDeliveryBoys = allBoys
             }
 
-            const candidates = availableDeliveryBoys.map(b => b._id)
+            // If coordinates exist, sort nearby delivery boys first
+            if (latitude && longitude && availableDeliveryBoys.length > 0) {
+                const targetLat = Number(latitude)
+                const targetLon = Number(longitude)
+                availableDeliveryBoys.sort((a, b) => {
+                    const aCoords = a.location?.coordinates || [0, 0]
+                    const bCoords = b.location?.coordinates || [0, 0]
+                    const distA = Math.hypot(aCoords[0] - targetLon, aCoords[1] - targetLat)
+                    const distB = Math.hypot(bCoords[0] - targetLon, bCoords[1] - targetLat)
+                    return distA - distB
+                })
+            }
 
-            if (candidates.length > 0) {
-                let deliveryAssignment: any = null
-                if (order.assignment) {
-                    deliveryAssignment = await DeliveryAssignment.findById(order.assignment)
-                }
+            let candidates = availableDeliveryBoys.map(b => b._id)
+            if (candidates.length === 0 && allIds.length > 0) {
+                candidates = allIds
+            }
 
-                if (!deliveryAssignment) {
-                    deliveryAssignment = await DeliveryAssignment.create({
-                        order: order._id,
-                        brodcastedTo: candidates,
-                        status: "brodcasted"
-                    })
-                    order.assignment = deliveryAssignment._id
-                } else {
-                    deliveryAssignment.brodcastedTo = candidates
-                    if (deliveryAssignment.status !== "assigned" && deliveryAssignment.status !== "completed") {
-                        deliveryAssignment.status = "brodcasted"
-                    }
-                    await deliveryAssignment.save()
-                }
+            let deliveryAssignment: any = null
+            if (order.assignment) {
+                deliveryAssignment = await DeliveryAssignment.findById(order.assignment)
+            }
 
-                await deliveryAssignment.populate("order")
-                console.log(`[PERF-LOG] Created/Updated assignment ${deliveryAssignment._id} in ${Date.now() - startTime}ms. Emitting to ${availableDeliveryBoys.length} boys.`)
+            if (!deliveryAssignment) {
+                deliveryAssignment = await DeliveryAssignment.create({
+                    order: order._id,
+                    brodcastedTo: candidates,
+                    status: "brodcasted"
+                })
+                order.assignment = deliveryAssignment._id
+            } else {
+                deliveryAssignment.brodcastedTo = candidates
+                deliveryAssignment.status = "brodcasted"
+                deliveryAssignment.assignedTo = null
+                await deliveryAssignment.save()
+            }
 
-                // Parallelize socket emissions targeting both socketId and userId
+            await order.save()
+            await deliveryAssignment.populate("order")
+            
+            console.log(`[ADMIN-ORDER] Emitting 'new-assignment' for Assignment ID: ${deliveryAssignment._id}`)
+
+            // Always broadcast new-assignment event globally to all connected delivery boys
+            await emitEventHandler("new-assignment", deliveryAssignment)
+
+            // Also target individual delivery boys by socketId / userId if available
+            if (availableDeliveryBoys.length > 0) {
                 await Promise.all(
                     availableDeliveryBoys.map(async (boy) => {
-                        console.log(`[ADMIN-ORDER] Target delivery boy userId: ${boy._id}, socketId: ${boy.socketId || "N/A"}`)
                         return emitEventHandler("new-assignment", deliveryAssignment, boy.socketId || undefined, String(boy._id))
                     })
                 )
@@ -125,8 +119,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
                     latitude: b.location?.coordinates?.[1] || 0,
                     longitude: b.location?.coordinates?.[0] || 0
                 }))
-            } else {
-                console.warn("[ADMIN-ORDER] No registered delivery boys exist in database.")
             }
         }
 

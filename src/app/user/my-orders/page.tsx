@@ -50,10 +50,16 @@ function MyOrder() {
 const getMyOrders=async ()=>{
   try {
     const result=await axios.get("/api/user/my-orders")
-    setOrders(result.data)
+    if (Array.isArray(result.data)) {
+      setOrders(result.data)
+    } else {
+      setOrders([])
+    }
     setLoading(false)
   } catch (error) {
     console.log(error)
+    setOrders([])
+    setLoading(false)
   }
 }
 getMyOrders()
@@ -63,9 +69,12 @@ getMyOrders()
   useEffect(()=>{
 const socket=getSocket()
 socket.on("order-assigned",({orderId,assignedDeliveryBoy})=>{
-setOrders((prev)=>prev?.map((o)=>(
-  o._id==orderId?{...o,assignedDeliveryBoy}:o
-)))
+setOrders((prev)=>{
+  if (!Array.isArray(prev)) return []
+  return prev.map((o)=>(
+    o._id==orderId?{...o,assignedDeliveryBoy}:o
+  ))
+})
 })
 
 return ()=>{socket.off("order-assigned")}
