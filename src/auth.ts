@@ -25,27 +25,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "email",type:"email" },
         password: { label: "Password", type: "password" },
       } ,
-     async authorize(credentials, request) {
-          
+     async authorize(credentials) {
+          try {
             await connectDb()
-            const email=credentials.email
-            const password=credentials.password as string
-            const user=await User.findOne({email})
-            if(!user){
+            const email = credentials.email as string
+            const password = credentials.password as string
+            const user = await User.findOne({ email })
+            if (!user) {
                 throw new Error("user does not exist")
             }
-            const isMatch=await bcrypt.compare(password,user.password)
-            if(!isMatch){
+            if (!user.password) {
+                throw new Error("this account uses Google sign-in")
+            }
+            const isMatch = await bcrypt.compare(password, user.password)
+            if (!isMatch) {
                 throw new Error("incorrect password")
             }
             return {
-                id:user._id.toString(),
-                email:user.email,
-                name:user.name,
-                role:user.role
+                id: user._id.toString(),
+                email: user.email,
+                name: user.name,
+                role: user.role
             }
-
-          } 
+          } catch (err: any) {
+            console.error("[AUTH] Credentials authorize error:", err.message)
+            throw err
+          }
+        }
     
     }),
     Google({
@@ -54,9 +60,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     })
   ],
   callbacks:{
-    // token ke ander user ka data dalta hai
     async signIn({ user, account }) {
-      console.log(user)
       try {
         if (account?.provider === "google") {
           await connectDb()
@@ -74,7 +78,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               if (e.code === 11000) {
                 dbUser = await User.findOne({ email: normalizedEmail })
               } else {
-                console.error("Google signIn DB create error:", e)
+                console.error("[AUTH] Google signIn DB create error:", e.message)
                 throw e
               }
             }
@@ -83,31 +87,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           user.role = dbUser.role
         }
         return true
-      } catch (err) {
-        console.error("Google signIn error:", err)
+      } catch (err: any) {
+        console.error("[AUTH] signIn callback error:", err.message)
         // Returning false triggers /login?error=AccessDenied
         return false
       }
     },
-    jwt({token,user,trigger,session}) {
-        if(user){
-            token.id=user.id;
-            token.name=user.name;
-            token.email=user.email;
-            token.role=user.role;
+    jwt({ token, user, trigger, session }) {
+        // On initial sign-in, user object is available — persist all fields
+        if (user) {
+            token.id = user.id
+            token.name = user.name
+            token.email = user.email
+            token.role = user.role
         }
-  if(trigger==="update" && session?.role){
-    token.role=session.role;
-  }
-
+        // On session.update() call (e.g. after role selection in EditRoleMobile)
+        if (trigger === "update" && session?.role) {
+          token.role = session.role
+        }
         return token
     },
-    session({session,token}) {
-        if(session.user){
-            session.user.id=token.id as string;
-            session.user.name=token.name as string;
-            session.user.email=token.email as string;
-            session.user.role=token.role as string;
+    session({ session, token }) {
+        if (session.user) {
+            session.user.id = token.id as string
+            session.user.name = token.name as string
+            session.user.email = token.email as string
+            // Ensure role is always a string; fall back to "user" only if truly missing
+            session.user.role = (token.role as string) || "user"
         }
         return session
     },
@@ -122,8 +128,3 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   secret:process.env.AUTH_SECRET
 })
-
-
-// connect db
-//email check
-//password match

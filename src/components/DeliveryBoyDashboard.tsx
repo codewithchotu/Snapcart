@@ -68,25 +68,52 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     }
   }, [dismissedOrderIds])
 
-  // Socket identity and connection management
+  // ── Socket lifecycle + DB fallback ──────────────────────────────────────────
+  // This single effect manages: identity, new-assignment listener, reconnect-refetch.
+  // It is only active once userData._id is known (i.e. authenticated DB user exists).
   useEffect(() => {
     if (!userData?._id) return
+
     const socket = getSocket()
 
-    const sendIdentity = () => {
-      if (userData?._id) {
-        console.log("[SOCKET] Emitting identity event with userId:", userData._id, "socket.id:", socket.id)
-        socket.emit("identity", userData._id)
-      }
+    // Helper: merge DB assignments deduplicating by _id
+    const mergeAssignments = (incoming: any[]) => {
+      setAssignments((prev) => {
+        const existing = new Map(prev.map((a) => [String(a._id), a]))
+        incoming.forEach((a) => existing.set(String(a._id), a))
+        return Array.from(existing.values())
+      })
     }
 
-    sendIdentity()
-    socket.on("connect", sendIdentity)
+    // Send identity and refresh assignments from DB
+    const onConnect = () => {
+      console.log("[SOCKET] Connected, socket.id:", socket.id, "userId:", userData._id)
+      socket.emit("identity", userData._id)
+      // Re-fetch from DB so missed notifications are recovered
+      fetchAssignments()
+      fetchCurrentOrder()
+    }
+
+    // Handle real-time new-assignment push
+    const handleNewAssignment = (assignment: any) => {
+      console.log("[DELIVERY-BOY] new-assignment received:", assignment?._id)
+      mergeAssignments([assignment])
+    }
+
+    // If already connected, send identity immediately
+    if (socket.connected) {
+      console.log("[SOCKET] Already connected, sending identity:", userData._id)
+      socket.emit("identity", userData._id)
+    }
+
+    socket.on("connect", onConnect)
+    socket.on("new-assignment", handleNewAssignment)
 
     return () => {
-      socket.off("connect", sendIdentity)
+      socket.off("connect", onConnect)
+      socket.off("new-assignment", handleNewAssignment)
     }
-  }, [userData?._id])
+  }, [userData?._id, fetchAssignments, fetchCurrentOrder])
 
   // Geolocation updates
   useEffect(() => {
@@ -123,26 +150,6 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     return () => navigator.geolocation.clearWatch(watcher)
   }, [userData?._id])
 
-  // Listen for new assignment notifications with deduplication and timing logs
-  useEffect(() => {
-    const socket = getSocket()
-
-    const handleNewAssignment = (deliveryAssignment: any) => {
-      console.log("[DELIVERY-BOY] Notification event 'new-assignment' received by delivery boy:", deliveryAssignment?._id)
-      setAssignments((prev) => {
-        if (prev.some((a) => String(a._id) === String(deliveryAssignment?._id))) {
-          return prev
-        }
-        return [deliveryAssignment, ...prev]
-      })
-    }
-
-    socket.on("new-assignment", handleNewAssignment)
-    return () => {
-      socket.off("new-assignment", handleNewAssignment)
-    }
-  }, [])
-
   // Listen for delivery boy location updates
   useEffect(() => {
     const socket = getSocket()
@@ -162,12 +169,26 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     }
   }, [userData?._id])
 
+  // Initial DB fetch once userData is ready
   useEffect(() => {
     if (userData?._id) {
       fetchCurrentOrder()
       fetchAssignments()
     }
   }, [userData?._id, fetchCurrentOrder, fetchAssignments])
+
+  // Re-fetch assignments when page becomes visible again (tab switch, browser back)
+  useEffect(() => {
+    if (!userData?._id) return
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchAssignments()
+        fetchCurrentOrder()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+  }, [userData?._id, fetchAssignments, fetchCurrentOrder])
 
   const handleAccept = async (id: string) => {
     try {
