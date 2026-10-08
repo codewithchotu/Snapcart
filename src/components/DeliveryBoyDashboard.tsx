@@ -75,6 +75,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
 
     const sendIdentity = () => {
       if (userData?._id) {
+        console.log("[SOCKET] Emitting identity event with userId:", userData._id, "socket.id:", socket.id)
         socket.emit("identity", userData._id)
       }
     }
@@ -93,23 +94,29 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     if (!userData?._id) return
     if (!navigator.geolocation) return
 
+    const handlePos = (pos: GeolocationPosition) => {
+      const lat = pos.coords.latitude
+      const lon = pos.coords.longitude
+      setDeliveryBoyLocation({
+        latitude: lat,
+        longitude: lon
+      })
+      socket.emit("update-location", {
+        userId: userData?._id,
+        latitude: lat,
+        longitude: lon
+      })
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      handlePos,
+      (err) => console.log("[GEO] getCurrentPosition:", err.message),
+      { enableHighAccuracy: true }
+    )
+
     const watcher = navigator.geolocation.watchPosition(
-      (pos) => {
-        const lat = pos.coords.latitude
-        const lon = pos.coords.longitude
-        setDeliveryBoyLocation({
-          latitude: lat,
-          longitude: lon
-        })
-        socket.emit("update-location", {
-          userId: userData?._id,
-          latitude: lat,
-          longitude: lon
-        })
-      },
-      (err) => {
-        console.log(err)
-      },
+      handlePos,
+      (err) => console.log("[GEO] watchPosition:", err.message),
       { enableHighAccuracy: true }
     )
 
@@ -121,9 +128,9 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     const socket = getSocket()
 
     const handleNewAssignment = (deliveryAssignment: any) => {
-      console.log(`[PERF-LOG] Received new-assignment event at ${new Date().toISOString()}:`, deliveryAssignment._id)
+      console.log("[DELIVERY-BOY] Notification event 'new-assignment' received by delivery boy:", deliveryAssignment?._id)
       setAssignments((prev) => {
-        if (prev.some((a) => String(a._id) === String(deliveryAssignment._id))) {
+        if (prev.some((a) => String(a._id) === String(deliveryAssignment?._id))) {
           return prev
         }
         return [deliveryAssignment, ...prev]

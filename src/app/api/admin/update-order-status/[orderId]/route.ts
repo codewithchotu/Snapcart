@@ -29,16 +29,25 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
         order.status = status
         let deliveryBoysPayload: any[] = []
         if (status === "out of delivery" && !order.assignment) {
-            const { latitude, longitude } = order.address
-            const nearByDeliveryBoys = await User.find({
-                role: "deliveryBoy",
-                location: {
-                    $near: {
-                        $geometry: { type: "Point", coordinates: [Number(longitude), Number(latitude)] },
-                        $maxDistance: 10000
-                    }
+            console.log(`[ADMIN-ORDER] Admin marking order out of delivery for orderId: ${orderId}`)
+            const { latitude, longitude } = order.address || {}
+            let nearByDeliveryBoys: any[] = []
+
+            if (latitude && longitude) {
+                try {
+                    nearByDeliveryBoys = await User.find({
+                        role: "deliveryBoy",
+                        location: {
+                            $near: {
+                                $geometry: { type: "Point", coordinates: [Number(longitude), Number(latitude)] },
+                                $maxDistance: 10000
+                            }
+                        }
+                    }).lean()
+                } catch (geoErr) {
+                    console.warn("[ADMIN-ORDER] Geo query error, falling back to all delivery boys:", geoErr)
                 }
-            }).lean()
+            }
 
             const nearByIds = nearByDeliveryBoys.map((b) => b._id)
             const busyIds = await DeliveryAssignment.find({
@@ -46,9 +55,29 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
                 status: { $nin: ["brodcasted", "completed"] }
             }).distinct("assignedTo")
             const busyIdSet = new Set(busyIds.map(b => String(b)))
-            const availableDeliveryBoys = nearByDeliveryBoys.filter(
+            let availableDeliveryBoys = nearByDeliveryBoys.filter(
                 b => !busyIdSet.has(String(b._id))
             )
+
+            // Fallback: If no delivery boys found in 10km radius (e.g. testing coordinates [0,0] or outside radius)
+            if (availableDeliveryBoys.length === 0) {
+                console.log("[ADMIN-ORDER] No nearby non-busy delivery boys found within 10km. Searching all registered delivery boys...")
+                const allBoys = await User.find({ role: "deliveryBoy" }).lean()
+                const allIds = allBoys.map(b => b._id)
+                const allBusyIds = await DeliveryAssignment.find({
+                    assignedTo: { $in: allIds },
+                    status: { $nin: ["brodcasted", "completed"] }
+                }).distinct("assignedTo")
+                const allBusySet = new Set(allBusyIds.map(b => String(b)))
+                availableDeliveryBoys = allBoys.filter(b => !allBusySet.has(String(b._id)))
+
+                // If STILL none available because of stale test assignments, include all registered delivery boys
+                if (availableDeliveryBoys.length === 0 && allBoys.length > 0) {
+                    console.log("[ADMIN-ORDER] All delivery boys are marked busy. Falling back to all registered delivery boys for dispatch.")
+                    availableDeliveryBoys = allBoys
+                }
+            }
+
             const candidates = availableDeliveryBoys.map(b => b._id)
 
             if (candidates.length === 0) {
@@ -71,12 +100,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
             await deliveryAssignment.populate("order");
             console.log(`[PERF-LOG] Created assignment ${deliveryAssignment._id} in ${Date.now() - startTime}ms. Emitting to ${availableDeliveryBoys.length} boys.`)
 
-            // Parallelize socket emissions without extra User.findById queries
+            // Parallelize socket emissions targeting both socketId and userId
             await Promise.all(
                 availableDeliveryBoys.map(async (boy) => {
-                    if (boy.socketId) {
-                        return emitEventHandler("new-assignment", deliveryAssignment, boy.socketId)
-                    }
+                    console.log(`[ADMIN-ORDER] Target delivery boy userId: ${boy._id}`)
+                    console.log(`[ADMIN-ORDER] Target socket.id: ${boy.socketId || "N/A"}`)
+                    return emitEventHandler("new-assignment", deliveryAssignment, boy.socketId || undefined, String(boy._id))
                 })
             )
 
@@ -85,8 +114,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
                 id: b._id,
                 name: b.name,
                 mobile: b.mobile,
-                latitude: b.location.coordinates[1],
-                longitude: b.location.coordinates[0]
+                latitude: b.location?.coordinates?.[1] || 0,
+                longitude: b.location?.coordinates?.[0] || 0
             }))
         }
 

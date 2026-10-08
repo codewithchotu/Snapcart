@@ -4,12 +4,26 @@ let socket: Socket | null = null
 
 export const getSocket = (): Socket => {
     if (!socket) {
-        socket = io(process.env.NEXT_PUBLIC_SOCKET_SERVER || "http://localhost:4000", {
+        const rawUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER || "https://snapcart-socket-server-28r1.onrender.com"
+        const socketUrl = rawUrl.replace(/\/+$/, '')
+        socket = io(socketUrl, {
             transports: ["websocket", "polling"],
             autoConnect: true,
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
+        })
+
+        socket.on("connect", () => {
+            console.log("[SOCKET] Connected successfully with socket.id:", socket?.id)
+        })
+
+        socket.on("disconnect", (reason) => {
+            console.log("[SOCKET] Disconnected, reason:", reason)
+        })
+
+        socket.on("connect_error", (error) => {
+            console.error("[SOCKET] Connection error:", error.message)
         })
     }
     if (!socket.connected) {

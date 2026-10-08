@@ -48,12 +48,12 @@ function AdminOrderCard({ order }: { order: IOrder }) {
     
     const updateStatus = async (orderId: string, status: string) => {
         try {
+            console.log("[ADMIN-UI] Admin updating order status:", { orderId, status })
             const result = await axios.post(`/api/admin/update-order-status/${orderId}`, { status })
-            console.log(result.data)
+            console.log("[ADMIN-UI] Update order status response:", result.data)
             setStatus(status)
-           
         } catch (error) {
-            console.log(error)
+            console.error("[ADMIN-UI] Update status error:", error)
         }
     }
 

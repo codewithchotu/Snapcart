@@ -9,6 +9,7 @@ function GeoUpdater({ userId }: { userId: string }) {
 
         const sendIdentity = () => {
             if (userId) {
+                console.log("[SOCKET] Emitting identity event with userId:", userId, "socket.id:", socket.id)
                 socket.emit("identity", userId)
             }
         }
@@ -17,7 +18,8 @@ function GeoUpdater({ userId }: { userId: string }) {
         socket.on("connect", sendIdentity)
 
         if (!navigator.geolocation) return
-        const watcher = navigator.geolocation.watchPosition((pos) => {
+
+        const handlePos = (pos: GeolocationPosition) => {
             const lat = pos.coords.latitude
             const lon = pos.coords.longitude
             socket.emit("update-location", {
@@ -25,9 +27,19 @@ function GeoUpdater({ userId }: { userId: string }) {
                 latitude: lat,
                 longitude: lon
             })
-        }, (err) => {
-            console.log(err)
-        }, { enableHighAccuracy: true })
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            handlePos,
+            (err) => console.log("[GEO] GeoUpdater getCurrentPosition:", err.message),
+            { enableHighAccuracy: true }
+        )
+
+        const watcher = navigator.geolocation.watchPosition(
+            handlePos,
+            (err) => console.log("[GEO] GeoUpdater watchPosition:", err.message),
+            { enableHighAccuracy: true }
+        )
 
         return () => {
             socket.off("connect", sendIdentity)
