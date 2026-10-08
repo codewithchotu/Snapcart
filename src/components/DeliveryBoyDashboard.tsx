@@ -24,6 +24,8 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
   const [otpError, setOtpError] = useState("")
   const [sendOtpLoading, setSendOtpLoading] = useState(false)
   const [verifyOtpLoading, setVerifyOtpLoading] = useState(false)
+  const [acceptingId, setAcceptingId] = useState<string | null>(null)
+  const [rejectedIds, setRejectedIds] = useState<string[]>([])
   const [otp, setOtp] = useState("")
   const [userLocation, setUserLocation] = useState<ILocation>({
     latitude: 0,
@@ -80,7 +82,8 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
       currentArr.forEach((item) => {
         if (item && typeof item === 'object') {
           const id = String(item._id || item.id || '')
-          if (id) {
+          const isRejectedByMe = Array.isArray(item.rejectedBy) && item.rejectedBy.some((r: any) => String(r) === String(userData?._id))
+          if (id && !rejectedIds.includes(id) && !isRejectedByMe) {
             map.set(id, item)
           }
         }
@@ -104,7 +107,8 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
         const target = item?.assignment || item?.data || item
         if (target && typeof target === 'object') {
           const id = String(target._id || target.id || '')
-          if (id) {
+          const isRejectedByMe = Array.isArray(target.rejectedBy) && target.rejectedBy.some((r: any) => String(r) === String(userData?._id))
+          if (id && !rejectedIds.includes(id) && !isRejectedByMe) {
             const existingItem = map.get(id) || {}
             map.set(id, { ...existingItem, ...target })
           }
@@ -113,7 +117,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
 
       return Array.from(map.values())
     })
-  }, [])
+  }, [rejectedIds, userData?._id])
 
   const fetchAssignments = useCallback(async () => {
     try {
@@ -132,21 +136,23 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
           const currentArr = Array.isArray(prev) ? prev : []
           const map = new Map<string, any>()
 
-          // 1. Preserve existing assignments in local state
+          // 1. Preserve existing assignments in local state (excluding rejected)
           currentArr.forEach((item) => {
             if (item && typeof item === 'object') {
               const id = String(item._id || item.id || '')
-              if (id) {
+              const isRejectedByMe = Array.isArray(item.rejectedBy) && item.rejectedBy.some((r: any) => String(r) === String(userData?._id))
+              if (id && !rejectedIds.includes(id) && !isRejectedByMe) {
                 map.set(id, item)
               }
             }
           })
 
-          // 2. Merge server assignments
+          // 2. Merge server assignments (excluding rejected)
           serverList.forEach((item: any) => {
             if (item && typeof item === 'object') {
               const id = String(item._id || item.id || '')
-              if (id) {
+              const isRejectedByMe = Array.isArray(item.rejectedBy) && item.rejectedBy.some((r: any) => String(r) === String(userData?._id))
+              if (id && !rejectedIds.includes(id) && !isRejectedByMe) {
                 const existingItem = map.get(id) || {}
                 map.set(id, { ...existingItem, ...item })
               }
@@ -160,7 +166,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
       console.error("[DELIVERY-DASHBOARD] fetchAssignments failed:", error)
       // Never wipe state on error
     }
-  }, [])
+  }, [rejectedIds, userData?._id])
 
   const fetchCurrentOrder = useCallback(async () => {
     try {
@@ -174,15 +180,15 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
         setActiveOrder(result.data.assignment)
         if (result.data.assignment.order.address) {
           setUserLocation({
-            latitude: result.data.assignment.order.address.latitude,
-            longitude: result.data.assignment.order.address.longitude
+            latitude: Number(result.data.assignment.order.address.latitude || 0),
+            longitude: Number(result.data.assignment.order.address.longitude || 0)
           })
         }
       } else {
         setActiveOrder(null)
       }
     } catch (error) {
-      console.log(error)
+      console.error("[DELIVERY-DASHBOARD] fetchCurrentOrder failed:", error)
     }
   }, [dismissedOrderIds])
 
@@ -222,6 +228,15 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
 
     const handleNewAssignment = (assignment: any) => {
       console.log(`[SOCKET] Real-time new-assignment received for DeliveryBoy ID: ${userData._id}`, assignment)
+      const target = assignment?.assignment || assignment?.data || assignment
+      const targetId = String(target?._id || '')
+      const isRejectedByMe = Array.isArray(target?.rejectedBy) && target.rejectedBy.some((r: any) => String(r) === String(userData._id))
+      
+      if (targetId && (rejectedIds.includes(targetId) || isRejectedByMe)) {
+        console.log(`[SOCKET] Ignoring assignment ${targetId} because it was rejected by this delivery boy`)
+        return
+      }
+
       if (assignment) {
         mergeAssignments([assignment])
         triggerAlert(assignment, "New Delivery Assignment Available!")
@@ -266,7 +281,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
       socket.off("order-assigned", handleOrderAssigned)
       socket.off("order-status-update", handleStatusUpdate)
     }
-  }, [userData?._id, fetchAssignments, fetchCurrentOrder, playNotificationSound, mergeAssignments])
+  }, [userData?._id, fetchAssignments, fetchCurrentOrder, playNotificationSound, mergeAssignments, rejectedIds])
 
   // 10-second background polling heartbeat (zero-miss fallback for mobile/Vercel)
   useEffect(() => {
@@ -355,11 +370,29 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
 
   const handleAccept = async (id: string) => {
     try {
-      await axios.get(`/api/delivery/assignment/${id}/accept-assignment`)
+      setAcceptingId(id)
+      console.log(`[DELIVERY-DASHBOARD] Accepting assignment ID: ${id}`)
+      const res = await axios.get(`/api/delivery/assignment/${id}/accept-assignment`)
+      console.log("[DELIVERY-DASHBOARD] Accept assignment response:", res.data)
       setAssignments((prev) => (Array.isArray(prev) ? prev : []).filter((a) => String(a._id) !== String(id)))
       await fetchCurrentOrder()
-    } catch (error) {
-      console.error("Accept assignment error:", error)
+      setCurrentView('assignments')
+    } catch (error: any) {
+      console.error("[DELIVERY-DASHBOARD] Accept assignment error:", error?.response?.data || error?.message)
+      alert(error?.response?.data?.message || "Failed to accept assignment. Please try again.")
+    } finally {
+      setAcceptingId(null)
+    }
+  }
+
+  const handleReject = async (id: string) => {
+    try {
+      console.log(`[DELIVERY-DASHBOARD] Rejecting assignment ID: ${id}`)
+      setRejectedIds((prev) => [...prev, String(id)])
+      setAssignments((prev) => (Array.isArray(prev) ? prev : []).filter((item) => String(item._id) !== String(id)))
+      await axios.post(`/api/delivery/assignment/${id}/reject-assignment`)
+    } catch (error: any) {
+      console.error("[DELIVERY-DASHBOARD] Reject assignment error:", error?.response?.data || error?.message)
     }
   }
 
@@ -423,7 +456,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
     await fetchAssignments()
   }
 
-  if (activeOrder && userLocation) {
+  if (activeOrder) {
     const isCompleted = activeOrder?.order?.deliveryOtpVerification || activeOrder?.order?.status === "delivered"
 
     return (
@@ -691,6 +724,7 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
                   const orderIdStr = orderObj?._id ? String(orderObj._id) : (a?._id ? String(a._id) : '')
                   const displayOrderId = orderIdStr ? orderIdStr.slice(-6) : 'N/A'
                   const fullAddress = orderObj?.address?.fullAddress || a?.address?.fullAddress || "Address details available upon accepting"
+                  const isAccepting = acceptingId === String(a?._id)
 
                   return (
                     <div key={a?._id || index} className='p-5 bg-white dark:bg-gray-800 rounded-2xl shadow-md border border-gray-100 dark:border-gray-700 hover:shadow-lg transition flex flex-col justify-between'>
@@ -710,14 +744,23 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
 
                       <div className='flex gap-3 mt-6'>
                         <button
-                          className='flex-1 bg-green-600 hover:bg-green-700 active:scale-95 text-white py-2.5 rounded-xl font-bold transition text-sm shadow-xs cursor-pointer'
+                          disabled={isAccepting}
+                          className='flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 active:scale-95 text-white py-2.5 rounded-xl font-bold transition text-sm shadow-xs cursor-pointer flex items-center justify-center gap-2'
                           onClick={() => a?._id && handleAccept(String(a._id))}
                         >
-                          Accept Delivery
+                          {isAccepting ? (
+                            <>
+                              <Loader size={16} className='animate-spin text-white' />
+                              <span>Accepting...</span>
+                            </>
+                          ) : (
+                            "Accept Delivery"
+                          )}
                         </button>
                         <button
-                          className='flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 text-gray-600 dark:text-gray-300 py-2.5 rounded-xl font-semibold transition text-sm border border-gray-200 dark:border-gray-600 cursor-pointer'
-                          onClick={() => a?._id && setAssignments(prev => (Array.isArray(prev) ? prev : []).filter(item => String(item?._id) !== String(a._id)))}
+                          disabled={isAccepting}
+                          className='flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 text-gray-600 dark:text-gray-300 py-2.5 rounded-xl font-semibold transition text-sm border border-gray-200 dark:border-gray-600 cursor-pointer disabled:opacity-50'
+                          onClick={() => a?._id && handleReject(String(a._id))}
                         >
                           Reject
                         </button>

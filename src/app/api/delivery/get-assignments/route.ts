@@ -11,9 +11,12 @@ export async function GET() {
            return NextResponse.json([], { status: 200 })
        }
 
-       // Fetch all broadcasted assignments
+       const deliveryBoyId = session.user.id
+
+       // Fetch all broadcasted assignments not rejected by this delivery boy
        const assignments = await DeliveryAssignment.find({
-           status: "brodcasted"
+           status: "brodcasted",
+           rejectedBy: { $ne: deliveryBoyId }
        }).populate("order").sort({ createdAt: -1 })
        
        const validAssignments = Array.isArray(assignments) 
