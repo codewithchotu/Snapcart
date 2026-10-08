@@ -12,6 +12,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
         await connectDb()
         const session = await auth()
         if (!session || session?.user?.role !== "admin") {
+          console.warn("[ADMIN-ORDER] Unauthorized update-order-status attempt")
           return NextResponse.json(
             { message: "You are not authorized as admin" },
             { status: 403 }
@@ -19,17 +20,22 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
         }
         const { orderId } = await context.params
         const { status } = await req.json()
+
+        console.log(`[ADMIN-ORDER] Updating status for orderId: ${orderId} to '${status}'`)
+
         const order = await Order.findById(orderId).populate("user")
         if (!order) {
             return NextResponse.json(
-                { message: "order not found" },
-                { status: 400 }
+                { message: "Order not found" },
+                { status: 404 }
             )
         }
+
         order.status = status
         let deliveryBoysPayload: any[] = []
-        if (status === "out of delivery" && !order.assignment) {
-            console.log(`[ADMIN-ORDER] Admin marking order out of delivery for orderId: ${orderId}`)
+
+        if (status === "out of delivery") {
+            console.log(`[ADMIN-ORDER] Dispatching delivery assignment for orderId: ${orderId}`)
             const { latitude, longitude } = order.address || {}
             let nearByDeliveryBoys: any[] = []
 
@@ -44,8 +50,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
                             }
                         }
                     }).lean()
-                } catch (geoErr) {
-                    console.warn("[ADMIN-ORDER] Geo query error, falling back to all delivery boys:", geoErr)
+                } catch (geoErr: any) {
+                    console.warn("[ADMIN-ORDER] Geo query error, falling back to all delivery boys:", geoErr?.message || geoErr)
                 }
             }
 
@@ -59,7 +65,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
                 b => !busyIdSet.has(String(b._id))
             )
 
-            // Fallback: If no delivery boys found in 10km radius (e.g. testing coordinates [0,0] or outside radius)
+            // Fallback: If no delivery boys found within 10km radius
             if (availableDeliveryBoys.length === 0) {
                 console.log("[ADMIN-ORDER] No nearby non-busy delivery boys found within 10km. Searching all registered delivery boys...")
                 const allBoys = await User.find({ role: "deliveryBoy" }).lean()
@@ -71,7 +77,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
                 const allBusySet = new Set(allBusyIds.map(b => String(b)))
                 availableDeliveryBoys = allBoys.filter(b => !allBusySet.has(String(b._id)))
 
-                // If STILL none available because of stale test assignments, include all registered delivery boys
+                // Secondary Fallback: If all delivery boys are currently marked busy, include all registered delivery boys so notification is delivered
                 if (availableDeliveryBoys.length === 0 && allBoys.length > 0) {
                     console.log("[ADMIN-ORDER] All delivery boys are marked busy. Falling back to all registered delivery boys for dispatch.")
                     availableDeliveryBoys = allBoys
@@ -80,59 +86,70 @@ export async function POST(req: NextRequest, context: { params: Promise<{ orderI
 
             const candidates = availableDeliveryBoys.map(b => b._id)
 
-            if (candidates.length === 0) {
-                await order.save()
+            if (candidates.length > 0) {
+                let deliveryAssignment: any = null
+                if (order.assignment) {
+                    deliveryAssignment = await DeliveryAssignment.findById(order.assignment)
+                }
 
-                await emitEventHandler("order-status-update", { orderId: order._id, status: order.status })
+                if (!deliveryAssignment) {
+                    deliveryAssignment = await DeliveryAssignment.create({
+                        order: order._id,
+                        brodcastedTo: candidates,
+                        status: "brodcasted"
+                    })
+                    order.assignment = deliveryAssignment._id
+                } else {
+                    deliveryAssignment.brodcastedTo = candidates
+                    if (deliveryAssignment.status !== "assigned" && deliveryAssignment.status !== "completed") {
+                        deliveryAssignment.status = "brodcasted"
+                    }
+                    await deliveryAssignment.save()
+                }
 
-                return NextResponse.json(
-                    { message: "there is no available Delivery boys" },
-                    { status: 200 }
+                await deliveryAssignment.populate("order")
+                console.log(`[PERF-LOG] Created/Updated assignment ${deliveryAssignment._id} in ${Date.now() - startTime}ms. Emitting to ${availableDeliveryBoys.length} boys.`)
+
+                // Parallelize socket emissions targeting both socketId and userId
+                await Promise.all(
+                    availableDeliveryBoys.map(async (boy) => {
+                        console.log(`[ADMIN-ORDER] Target delivery boy userId: ${boy._id}, socketId: ${boy.socketId || "N/A"}`)
+                        return emitEventHandler("new-assignment", deliveryAssignment, boy.socketId || undefined, String(boy._id))
+                    })
                 )
+
+                deliveryBoysPayload = availableDeliveryBoys.map(b => ({
+                    id: b._id,
+                    name: b.name,
+                    mobile: b.mobile,
+                    latitude: b.location?.coordinates?.[1] || 0,
+                    longitude: b.location?.coordinates?.[0] || 0
+                }))
+            } else {
+                console.warn("[ADMIN-ORDER] No registered delivery boys exist in database.")
             }
-
-            const deliveryAssignment = await DeliveryAssignment.create({
-                order: order._id,
-                brodcastedTo: candidates,
-                status: "brodcasted"
-            })
-
-            await deliveryAssignment.populate("order");
-            console.log(`[PERF-LOG] Created assignment ${deliveryAssignment._id} in ${Date.now() - startTime}ms. Emitting to ${availableDeliveryBoys.length} boys.`)
-
-            // Parallelize socket emissions targeting both socketId and userId
-            await Promise.all(
-                availableDeliveryBoys.map(async (boy) => {
-                    console.log(`[ADMIN-ORDER] Target delivery boy userId: ${boy._id}`)
-                    console.log(`[ADMIN-ORDER] Target socket.id: ${boy.socketId || "N/A"}`)
-                    return emitEventHandler("new-assignment", deliveryAssignment, boy.socketId || undefined, String(boy._id))
-                })
-            )
-
-            order.assignment = deliveryAssignment._id
-            deliveryBoysPayload = availableDeliveryBoys.map(b => ({
-                id: b._id,
-                name: b.name,
-                mobile: b.mobile,
-                latitude: b.location?.coordinates?.[1] || 0,
-                longitude: b.location?.coordinates?.[0] || 0
-            }))
         }
 
         await order.save()
         await order.populate("user")
-        await emitEventHandler("order-status-update", { orderId: order._id, status: order.status })
 
-        console.log(`[PERF-LOG] update-order-status total duration: ${Date.now() - startTime}ms`)
+        // Emit real-time status update event to all subscribers
+        await emitEventHandler("order-status-update", { orderId: String(order._id), status: order.status })
+
+        console.log(`[PERF-LOG] update-order-status completed in ${Date.now() - startTime}ms`)
 
         return NextResponse.json({
-            assignment: order.assignment?._id,
+            success: true,
+            orderId: order._id,
+            status: order.status,
+            assignment: order.assignment,
             availableBoys: deliveryBoysPayload
         }, { status: 200 })
 
-    } catch (error) {
+    } catch (error: any) {
+        console.error("[ADMIN-ORDER] Error updating order status:", error?.message || error)
         return NextResponse.json({
-            message: `update status error ${error}`
+            message: `Update status error: ${error?.message || error}`
         }, { status: 500 })
     }
 }

@@ -46,29 +46,33 @@ function AdminOrderCard({ order }: { order: IOrder }) {
     const [status, setStatus] = useState<string>("pending")
     const statusOptions = ["pending", "out of delivery"]
     
-    const updateStatus = async (orderId: string, status: string) => {
+    const updateStatus = async (orderId: string, newStatus: string) => {
         try {
-            console.log("[ADMIN-UI] Admin updating order status:", { orderId, status })
-            const result = await axios.post(`/api/admin/update-order-status/${orderId}`, { status })
+            console.log("[ADMIN-UI] Admin updating order status:", { orderId, status: newStatus })
+            const result = await axios.post(`/api/admin/update-order-status/${orderId}`, { status: newStatus })
             console.log("[ADMIN-UI] Update order status response:", result.data)
-            setStatus(status)
+            setStatus(newStatus)
         } catch (error) {
             console.error("[ADMIN-UI] Update status error:", error)
         }
     }
 
-    useEffect(()=>{
-      setStatus(order.status)
-    },[order])
-    useEffect(():any=>{
-    const socket=getSocket()
-    socket.on("order-status-update",(data)=>{
-        if(data.orderId.toString()==order?._id!.toString()){
-            setStatus(data.status)
+    useEffect(() => {
+        setStatus(order.status)
+    }, [order])
+
+    useEffect(() => {
+        const socket = getSocket()
+        const handleStatusUpdate = (data: any) => {
+            if (String(data?.orderId) === String(order?._id)) {
+                setStatus(data.status)
+            }
         }
-    })
-    return ()=>socket.off("order-status-update")
-        },[])
+        socket.on("order-status-update", handleStatusUpdate)
+        return () => {
+            socket.off("order-status-update", handleStatusUpdate)
+        }
+    }, [order?._id])
     return (
         <motion.div
             key={order._id?.toString()}
