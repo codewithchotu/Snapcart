@@ -1,0 +1,25 @@
+{
+  "snapcart-logger": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python \"c:/Users/owais/Downloads/1.snapcartFolder/1.snapcartFolder/1.snapcart/scripts/agent_logger.py\"",
+        "timeout": 30
+      }
+    ],
+    "PostInvocation": [
+      {
+        "type": "command",
+        "command": "python \"c:/Users/owais/Downloads/1.snapcartFolder/1.snapcartFolder/1.snapcart/scripts/agent_logger.py\"",
+        "timeout": 30
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python \"c:/Users/owais/Downloads/1.snapcartFolder/1.snapcartFolder/1.snapcart/scripts/agent_logger.py\"",
+        "timeout": 30
+      }
+    ]
+  }
+}
