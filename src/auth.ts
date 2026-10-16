@@ -83,11 +83,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           let dbUser = await User.findOne({ email: normalizedEmail })
           if (!dbUser) {
             try {
+              const Store = (await import("@/models/store.model")).default
+              const matchingStores = await Store.find({ pendingAdminEmails: normalizedEmail })
+              const assignedRole = matchingStores.length > 0 ? "admin" : "user"
+
               dbUser = await User.create({
                 name: user.name,
                 email: normalizedEmail,
                 image: user.image,
+                role: assignedRole,
+                managedStores: matchingStores.map(s => s._id)
               })
+
+              if (matchingStores.length > 0) {
+                for (const st of matchingStores) {
+                  st.assignedAdmins = st.assignedAdmins || []
+                  st.assignedAdmins.push(dbUser._id)
+                  st.pendingAdminEmails = (st.pendingAdminEmails || []).filter((e: string) => e !== normalizedEmail)
+                  await st.save()
+                }
+              }
             } catch (e: any) {
               // Handle duplicate-key race condition
               if (e.code === 11000) {

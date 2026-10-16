@@ -1,7 +1,8 @@
 'use client'
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader, PlusCircle, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, CheckCircle2, Loader, PlusCircle, Store as StoreIcon, Trash2, Upload, X } from 'lucide-react'
 import Link from 'next/link'
-import React, { ChangeEvent, FormEvent, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
+import React, { ChangeEvent, FormEvent, Suspense, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from "motion/react"
 import Image from 'next/image'
 import axios from 'axios'
@@ -23,7 +24,18 @@ const units = [
     "kg", "g", "liter", "ml", "piece", "pack"
 ]
 
-function AddGrocery() {
+interface IAdminStore {
+    _id: string
+    name: string
+    storeCode: string
+}
+
+function AddGroceryContent() {
+    const searchParams = useSearchParams()
+    const queryStoreId = searchParams.get('storeId') || ''
+
+    const [stores, setStores] = useState<IAdminStore[]>([])
+    const [selectedStoreId, setSelectedStoreId] = useState(queryStoreId)
     const [name, setName] = useState("")
     const [category, setCategory] = useState("")
     const [unit, setUnit] = useState("")
@@ -33,6 +45,24 @@ function AddGrocery() {
     const [backendImage, setBackendImage] = useState<File | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
+    const [isSuperAdminBlocked, setIsSuperAdminBlocked] = useState(false)
+
+    useEffect(() => {
+        const fetchStores = async () => {
+            try {
+                const res = await axios.get('/api/admin/stores')
+                if (Array.isArray(res.data)) {
+                    setStores(res.data)
+                    if (!selectedStoreId && res.data.length > 0) {
+                        setSelectedStoreId(res.data[0]._id)
+                    }
+                }
+            } catch (e: any) {
+                console.error("Failed to load stores:", e)
+            }
+        }
+        fetchStores()
+    }, [])
 
     const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
@@ -65,6 +95,9 @@ function AddGrocery() {
             formData.append("category", category)
             formData.append("price", price.trim())
             formData.append("unit", unit)
+            if (selectedStoreId) {
+                formData.append("storeId", selectedStoreId)
+            }
             if (backendImage) {
                 formData.append("image", backendImage)
             }
@@ -90,9 +123,9 @@ function AddGrocery() {
 
     return (
         <div className='min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 to-white dark:from-gray-900 dark:to-gray-800 py-20 px-4 relative w-full'>
-            <Link href={"/"} className='absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 text-green-700 dark:text-green-400 font-semibold bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-md hover:bg-green-100 transition-all border border-gray-100 dark:border-gray-700 text-sm sm:text-base'>
+            <Link href={"/admin/stores"} className='absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 text-green-700 dark:text-green-400 font-semibold bg-white dark:bg-gray-800 px-4 py-2 rounded-full shadow-md hover:bg-green-100 transition-all border border-gray-100 dark:border-gray-700 text-sm sm:text-base'>
                 <ArrowLeft className='w-4 h-4 sm:w-5 sm:h-5' />
-                <span>Back to Home</span>
+                <span>My Stores</span>
             </Link>
             <motion.div
                 initial={{ y: 20, opacity: 0 }}
@@ -103,10 +136,10 @@ function AddGrocery() {
                 <div className='flex flex-col items-center mb-8'>
                     <div className='flex items-center gap-3'>
                         <PlusCircle className='text-green-600 w-8 h-8' />
-                        <h1 className='text-2xl font-bold text-gray-800'>Add Your Grocery</h1>
+                        <h1 className='text-2xl font-bold text-gray-800 dark:text-gray-100'>Add Your Grocery</h1>
                     </div>
-                    <p className='text-gray-500 text-sm mt-2 text-center'>
-                        Fill out the details below to add a new grocery item.
+                    <p className='text-gray-500 dark:text-gray-400 text-sm mt-2 text-center'>
+                        Fill out the details below to add a new grocery item to your kirana store.
                     </p>
                 </div>
 
@@ -155,8 +188,33 @@ function AddGrocery() {
                 </AnimatePresence>
 
                 <form className='flex flex-col gap-6 w-full' onSubmit={handleSubmit}>
+                    {/* Store Selector */}
                     <div>
-                        <label htmlFor="name" className='block text-gray-700 font-medium mb-1'> Grocery Name <span className='text-red-500'>*</span></label>
+                        <label className='block text-gray-700 dark:text-gray-300 font-medium mb-1'>Target Kirana Store <span className='text-red-500'>*</span></label>
+                        {stores.length === 0 ? (
+                            <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/30 p-3 rounded-xl border border-amber-200 dark:border-amber-700">
+                                No stores found. Please <Link href="/admin/stores" className="underline font-semibold">create a kirana store</Link> first.
+                            </p>
+                        ) : (
+                            <div className="relative">
+                                <select
+                                    value={selectedStoreId}
+                                    onChange={(e) => setSelectedStoreId(e.target.value)}
+                                    required
+                                    className='w-full border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-green-400 transition-all bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 font-medium'
+                                >
+                                    {stores.map((s) => (
+                                        <option key={s._id} value={s._id}>
+                                            🏪 {s.name} ({s.storeCode})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+
+                    <div>
+                        <label htmlFor="name" className='block text-gray-700 dark:text-gray-300 font-medium mb-1'> Grocery Name <span className='text-red-500'>*</span></label>
                         <input
                             type="text"
                             id='name'
@@ -164,7 +222,7 @@ function AddGrocery() {
                             onChange={(e) => setName(e.target.value)}
                             value={name}
                             required
-                            className='w-full border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-green-400 transition-all'
+                            className='w-full border border-gray-300 dark:border-gray-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-green-400 transition-all bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100'
                         />
                     </div>
                     <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
@@ -267,5 +325,15 @@ function AddGrocery() {
     )
 }
 
-export default AddGrocery
+export default function AddGrocery() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <Loader className="w-8 h-8 animate-spin text-green-600" />
+            </div>
+        }>
+            <AddGroceryContent />
+        </Suspense>
+    )
+}
 

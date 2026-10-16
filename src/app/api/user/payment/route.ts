@@ -2,6 +2,8 @@ import connectDb from "@/lib/db";
 import Order from "@/models/order.model";
 import User from "@/models/user.model";
 import { NextRequest, NextResponse } from "next/server";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 import Stripe from "stripe";
 
 const stripe=new Stripe(process.env.STRIPE_SECRET_KEY!)
@@ -33,7 +35,6 @@ export async function POST(req:NextRequest) {
         })
 
         const session=await stripe.checkout.sessions.create({
-            payment_method_types:["card"],
             mode:"payment",
             success_url:`${process.env.NEXT_BASE_URL}/user/order-success`,
             cancel_url:`${process.env.NEXT_BASE_URL}/user/order-cancel`,

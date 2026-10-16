@@ -7,6 +7,7 @@ export interface IGrocery {
     price: string,
     unit: string,
     image?: string,
+    store: mongoose.Types.ObjectId,
     createdAt?: Date,
     updatedAt?: Date
 }
@@ -46,7 +47,8 @@ const grocerySchema = new mongoose.Schema<IGrocery>({
     image: {
         type: String,
         default: ""
-    }
+    },
+    store: { type: mongoose.Schema.Types.ObjectId, ref: "Store", required: true }
 }, {
     timestamps: true
 })

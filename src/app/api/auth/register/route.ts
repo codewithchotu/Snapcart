@@ -21,14 +21,38 @@ export async function POST(req:NextRequest) {
         )
    }
 
-   const hashedPassword=await bcrypt.hash(password,10)
-   const user=await User.create({
-    name,email,password:hashedPassword
+   const hashedPassword = await bcrypt.hash(password, 10)
+   const normalizedEmail = email.toLowerCase().trim()
+
+   // Check if Super Admin invited this email to manage any Kirana store
+   const Store = (await import("@/models/store.model")).default
+   const matchingStores = await Store.find({ pendingAdminEmails: normalizedEmail })
+
+   const isAssignedKiranaAdmin = matchingStores.length > 0
+   const role = isAssignedKiranaAdmin ? "admin" : "user"
+
+   const user = await User.create({
+     name,
+     email: normalizedEmail,
+     password: hashedPassword,
+     role,
+     managedStores: matchingStores.map(s => s._id)
    })
-    return NextResponse.json(
-            user,
-            {status:200}
-        )
+
+   // Link new user to matching stores and remove from pendingAdminEmails
+   if (isAssignedKiranaAdmin) {
+     for (const st of matchingStores) {
+       st.assignedAdmins = st.assignedAdmins || []
+       st.assignedAdmins.push(user._id)
+       st.pendingAdminEmails = (st.pendingAdminEmails || []).filter((e: string) => e !== normalizedEmail)
+       await st.save()
+     }
+   }
+
+   return NextResponse.json(
+     user,
+     { status: 200 }
+   )
         
     } catch (error) {
          return NextResponse.json(

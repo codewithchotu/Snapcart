@@ -1,6 +1,8 @@
 import connectDb from "@/lib/db";
 import Order from "@/models/order.model";
 import { NextRequest, NextResponse } from "next/server";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 import Stripe from "stripe";
 
 const stripe=new Stripe(process.env.STRIPE_SECRET_KEY!)

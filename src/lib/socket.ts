@@ -11,28 +11,30 @@ export const getSocket = (): Socket => {
             autoConnect: true,
             reconnection: true,
             reconnectionAttempts: Infinity,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 10000,
             timeout: 20000,
         })
 
         socket.on("connect", () => {
-            console.log("[SOCKET] Connected successfully with socket.id:", socket?.id)
+            hasLoggedConnectError = false
+            console.log("[SOCKET] Connected:", socket?.id)
         })
 
         socket.on("disconnect", (reason) => {
-            console.log("[SOCKET] Disconnected, reason:", reason)
-            if (reason === "io server disconnect" || reason === "transport close") {
+            if (reason === "io server disconnect") {
                 socket?.connect()
             }
         })
 
-        socket.on("connect_error", (error) => {
-            console.error("[SOCKET] Connection error:", error.message)
-        })
+        // Silent handler — socket.io retries automatically, no logging needed
+        socket.on("connect_error", () => { /* retry silently */ })
     }
-    if (!socket.connected) {
+
+    // Only call connect() if completely idle (not connected AND not already connecting)
+    if (!socket.connected && !socket.active) {
         socket.connect()
     }
+
     return socket
 }

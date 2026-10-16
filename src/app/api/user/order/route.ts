@@ -22,16 +22,28 @@ export async function POST(req: NextRequest) {
             )
         }
 
+        const groceryIds = items.map((i: any) => i.grocery)
+        const dbGroceries = await (await import("@/models/grocery.model")).default.find({ _id: { $in: groceryIds } }).select("_id store")
+        const groceryStoreMap = new Map(dbGroceries.map(g => [g._id.toString(), g.store]))
+
+        const enrichedItems = items.map((i: any) => ({
+            ...i,
+            store: i.store || groceryStoreMap.get(i.grocery?.toString())
+        }))
+
+        // Order primary store (from first item or explicitly passed)
+        const primaryStore = enrichedItems.find((i: any) => i.store)?.store || null
+
         const newOrder = await Order.create({
             user: userId,
-            items,
+            store: primaryStore,
+            items: enrichedItems,
             paymentMethod,
             totalAmount,
             address
         })
 
-
-        await emitEventHandler("new-order",newOrder)
+        await emitEventHandler("new-order", newOrder)
 
         return NextResponse.json(
             newOrder,

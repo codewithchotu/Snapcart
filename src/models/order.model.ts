@@ -5,9 +5,11 @@ import mongoose from "mongoose";
 export interface IOrder {
     _id?: mongoose.Types.ObjectId
     user: mongoose.Types.ObjectId
+    store?: mongoose.Types.ObjectId
     items: [
         {
             grocery: mongoose.Types.ObjectId,
+            store?: mongoose.Types.ObjectId,
             name: string,
             price: string,
             unit: string,
@@ -45,12 +47,20 @@ const orderSchema = new mongoose.Schema<IOrder>({
         ref: "User",
         required: true
     },
+    store: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Store"
+    },
     items: [
         {
             grocery: {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: "Grocery",
                 required: true
+            },
+            store: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Store"
             },
             name: String,
             price: String,

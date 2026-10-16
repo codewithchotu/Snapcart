@@ -6,22 +6,23 @@ export interface IUser{
     email:string
     password?:string
     mobile?:string
-    role:"user" | "deliveryBoy" | "admin"
-    image?:string,
-   location?: {
-    type: {
-        type: StringConstructor;
-        enum: string[];
-        default: string;
-    };
-    coordinates: {
-        type: NumberConstructor[];
-        default: number[];
-    };
-},
-socketId:string | null
-isOnline:Boolean
-  
+    role: "user" | "deliveryBoy" | "admin" | "superAdmin"
+    image?: string,
+    location?: {
+        type: {
+            type: StringConstructor;
+            enum: string[];
+            default: string;
+        };
+        coordinates: {
+            type: NumberConstructor[];
+            default: number[];
+        };
+    },
+    socketId: string | null
+    isOnline: Boolean
+    savedStores: mongoose.Types.ObjectId[]
+    managedStores?: mongoose.Types.ObjectId[]
 }
 
 const userSchema=new mongoose.Schema<IUser>({
@@ -44,7 +45,7 @@ mobile:{
 },
 role:{
     type:String,
-    enum:["user","deliveryBoy","admin"],
+    enum:["user","deliveryBoy","admin","superAdmin"],
     default:"user"
 },
 image:{
@@ -68,7 +69,15 @@ socketId:{
 isOnline:{
     type:Boolean,
     default:false
-}
+},
+savedStores:[{
+    type:mongoose.Schema.Types.ObjectId,
+    ref:"Store"
+}],
+managedStores:[{
+    type:mongoose.Schema.Types.ObjectId,
+    ref:"Store"
+}]
 
 },{timestamps:true})
 

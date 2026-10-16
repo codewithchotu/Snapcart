@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "./auth"
 
 /**
- * Next.js 16 Proxy function — replaces deprecated middleware convention.
+ * Next.js 16tsx
+ *  Proxy function — replaces deprecated middleware convention.
  *
  * Requirements & Logic:
  * - Public routes (/login, /register, /api/auth, /unauthorized) always pass through.

@@ -91,7 +91,8 @@ function Login() {
 
     const getRoleLabel = (role: string) => {
       switch (role) {
-        case 'admin': return 'Admin'
+        case 'superAdmin': return '👑 Super Admin'
+        case 'admin': return 'Kirana Store Admin'
         case 'deliveryBoy': return 'Delivery Boy'
         case 'user': default: return 'User'
       }
@@ -99,6 +100,7 @@ function Login() {
 
     const getRoleIcon = (role: string) => {
       switch (role) {
+        case 'superAdmin': return <ShieldCheck className='w-6 h-6 text-amber-500' />
         case 'admin': return <UserCog className='w-6 h-6 text-purple-600 dark:text-purple-400' />
         case 'deliveryBoy': return <Bike className='w-6 h-6 text-orange-500 dark:text-orange-400' />
         case 'user': default: return <User className='w-6 h-6 text-green-600 dark:text-green-400' />
@@ -200,6 +202,12 @@ function Login() {
           onClick={() => router.push("/register")}
         >
           Want to create an account? <LogIn className='w-4 h-4'/> <span className='text-green-600 dark:text-green-400 font-semibold'>Sign Up</span>
+        </p>
+        <p
+          className='cursor-pointer text-gray-500 dark:text-gray-500 mt-3 text-xs flex items-center gap-1.5 hover:text-green-600 transition-colors'
+          onClick={() => router.push("/kirana-login")}
+        >
+          <Key className='w-3.5 h-3.5'/> Kirana Store Owner? <span className='text-green-600 dark:text-green-400 font-semibold'>Login here →</span>
         </p>
       </div>
 

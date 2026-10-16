@@ -1,27 +1,29 @@
 import React from 'react'
 import HeroSection from './HeroSection'
 import CategorySlider from './CategorySlider'
-import connectDb from '@/lib/db'
-import Grocery, { IGrocery } from '@/models/grocery.model'
-import GroceryItemCard from './GroceryItemCard'
+import { IGrocery } from '@/models/grocery.model'
+import MyStoresSection from './MyStoresSection'
 
-async function UserDashboard({groceryList}:{groceryList:IGrocery[]}) {
-await connectDb()
-const plainGrocery = JSON.parse(JSON.stringify(groceryList))
-
+async function UserDashboard({ groceryList }: { groceryList: IGrocery[] }) {
   return (
     <>
-      <HeroSection/>
-      <CategorySlider/>
-      <div className='w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-3 sm:px-6 lg:px-8 mt-10 mb-16'>
-        <h2 className='text-2xl md:text-3xl font-bold text-green-700 dark:text-green-400 mb-6 text-center'>Popular Grocery Items</h2>
-        <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-5 lg:gap-6'> 
-          {plainGrocery.map((item:any,index:number)=>(
-            <GroceryItemCard key={index} item={item}/>
-          ))}
+      <HeroSection />
+      <CategorySlider />
+      {/* My Kirana Stores — the new core feature */}
+      <MyStoresSection />
+
+      {/* Optional: show a subtle "Browse all" section below stores */}
+      {groceryList.length > 0 && (
+        <div className="w-full max-w-7xl xl:max-w-[1550px] 2xl:max-w-[1750px] mx-auto px-3 sm:px-6 lg:px-8 mt-4 mb-16">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+            <p className="text-sm text-gray-400 dark:text-gray-500 whitespace-nowrap font-medium">
+              or browse all available items
+            </p>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          </div>
         </div>
-      </div>
-     
+      )}
     </>
   )
 }

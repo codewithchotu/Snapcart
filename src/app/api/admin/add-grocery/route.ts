@@ -2,27 +2,38 @@ import { auth } from "@/auth";
 import uploadOnCloudinary from "@/lib/cloudinary";
 import connectDb from "@/lib/db";
 import Grocery from "@/models/grocery.model";
+import Store from "@/models/store.model";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
     try {
         await connectDb()
         const session = await auth()
-        if (session?.user?.role !== "admin") {
+        if (!session?.user?.id) {
+            return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+        }
+
+        // Super Admin is for store onboarding and admin authentication, not grocery stock entry
+        if (session.user.role === "superAdmin") {
             return NextResponse.json(
-                { message: "You are not authorized as admin" },
+                { message: "Super Admin does not add groceries. Groceries must be added by the assigned Kirana Store Admin." },
                 { status: 403 }
             )
         }
 
-        console.log("1. Request received")
-        const formData = await req.formData()
-        console.log("2. FormData received")
+        if (session.user.role !== "admin") {
+            return NextResponse.json(
+                { message: "You are not authorized as a Kirana Store Admin" },
+                { status: 403 }
+            )
+        }
 
+        const formData = await req.formData()
         const name = formData.get("name") as string
         const category = formData.get("category") as string
         const unit = formData.get("unit") as string
         const price = formData.get("price") as string
+        const storeId = formData.get("storeId") as string
         const file = formData.get("image") as Blob | null
 
         if (!name || !category || !unit || !price) {
@@ -32,15 +43,36 @@ export async function POST(req: NextRequest) {
             )
         }
 
+        if (!storeId) {
+            return NextResponse.json(
+                { message: "Please select a Kirana store to add this grocery to." },
+                { status: 400 }
+            )
+        }
+
+        // Verify that this user is the owner or in assignedAdmins of this store
+        const store = await Store.findOne({
+            _id: storeId,
+            $or: [
+                { owner: session.user.id },
+                { assignedAdmins: session.user.id }
+            ]
+        })
+
+        if (!store) {
+            return NextResponse.json(
+                { message: "You are not authorized to manage groceries for this Kirana store." },
+                { status: 403 }
+            )
+        }
+
         let imageUrl = ""
         if (file && file instanceof Blob && file.size > 0) {
-            console.log("3. Starting Cloudinary upload")
             try {
                 const uploadedUrl = await uploadOnCloudinary(file)
                 if (uploadedUrl) {
                     imageUrl = uploadedUrl
                 }
-                console.log("4. Cloudinary upload finished:", imageUrl)
             } catch (uploadError: any) {
                 console.error("Cloudinary upload error in add-grocery route:", uploadError?.message || uploadError)
                 return NextResponse.json(
@@ -50,16 +82,15 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        console.log("5. Creating grocery in MongoDB")
         const grocery = await Grocery.create({
-            name,
-            price,
+            name: name.trim(),
+            price: price.trim(),
             category,
             unit,
-            image: imageUrl
+            image: imageUrl,
+            store: storeId,
         })
 
-        console.log("6. Grocery created:", grocery._id)
         return NextResponse.json(
             grocery,
             { status: 201 }

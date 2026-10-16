@@ -24,6 +24,8 @@ const units = [
 function ViewGrocery() {
     const router = useRouter()
     const [groceries, setGroceries] = useState<IGrocery[]>()
+    const [stores, setStores] = useState<{ _id: string; name: string; storeCode: string }[]>([])
+    const [selectedStoreId, setSelectedStoreId] = useState<string>("")
     const [search,setSearch]=useState("")
     const [editing, setEditing] = useState<IGrocery | null>(null)
     const [imagePreview,setImagePreview]=useState<string | null>(null)
@@ -31,10 +33,26 @@ function ViewGrocery() {
     const [loading,setLoading]=useState(false)
     const [deleteLoading,setDeleteLoading]=useState(false)
     const [fillterd,setFilltered]=useState<IGrocery[]>()
+
+    useEffect(() => {
+        const getStores = async () => {
+            try {
+                const res = await axios.get('/api/admin/stores')
+                if (Array.isArray(res.data)) {
+                    setStores(res.data)
+                }
+            } catch (e) {
+                console.error("Failed to load stores", e)
+            }
+        }
+        getStores()
+    }, [])
+
     useEffect(() => {
         const getGroceries = async () => {
             try {
-                const result = await axios.get("/api/admin/get-groceries")
+                const url = selectedStoreId ? `/api/admin/get-groceries?storeId=${selectedStoreId}` : "/api/admin/get-groceries"
+                const result = await axios.get(url)
                 setGroceries(result.data)
                 setFilltered(result.data)
             } catch (error) {
@@ -42,7 +60,7 @@ function ViewGrocery() {
             }
         }
         getGroceries()
-    }, [])
+    }, [selectedStoreId])
 
     useEffect(()=>{
 if(editing){
@@ -117,7 +135,23 @@ formData.append("image",backendImage)
                     onClick={() => router.push("/")}
                     className='flex items-center justify-center gap-2 bg-green-100 dark:bg-gray-800 hover:bg-green-200 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full transition w-full sm:w-auto'
                 ><ArrowLeft size={18} /><span>Back</span></button>
-                <h1 className='text-2xl md:text-3xl font-extrabold text-green-700 dark:text-green-400 flex items-center justify-center gap-2'><Package size={28} className='text-green-600 dark:text-green-400' />Manage Groceries</h1>
+                <div className='flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end'>
+                    {stores.length > 0 && (
+                        <select
+                            value={selectedStoreId}
+                            onChange={(e) => setSelectedStoreId(e.target.value)}
+                            className="text-xs sm:text-sm font-semibold bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-green-500 shadow-sm"
+                        >
+                            <option value="">All My Stores ({stores.length})</option>
+                            {stores.map(s => (
+                                <option key={s._id} value={s._id}>
+                                    🏪 {s.name} ({s.storeCode})
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                    <h1 className='text-2xl md:text-3xl font-extrabold text-green-700 dark:text-green-400 flex items-center justify-center gap-2'><Package size={28} className='text-green-600 dark:text-green-400' />Manage Groceries</h1>
+                </div>
             </motion.div>
 
             <motion.form initial={{ opacity: 0, y: 10 }}

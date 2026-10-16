@@ -75,7 +75,10 @@ if(user.role==="user"){
     <>
       <Nav user={plainUser} />
       <GeoUpdater userId={plainUser._id}/>
-      {user.role == "user" ? (
+      {user.role == "superAdmin" ? (
+        // Super Admin gets direct access to Store Control Center
+        <AdminDashboard />
+      ) : user.role == "user" ? (
         <UserDashboard groceryList={groceryList}/>
       ) : user.role == "admin" ? (
         <AdminDashboard />

@@ -1,5 +1,5 @@
 'use client'
-import { Boxes, ClipboardCheck, Cross, LogOut, Menu, Package, Plus, PlusCircle, RefreshCw, Search, ShoppingCartIcon, User, UserCog, Bike, X } from 'lucide-react'
+import { Boxes, ClipboardCheck, LogOut, Menu, Package, Plus, PlusCircle, RefreshCw, Search, ShoppingCartIcon, Store, User, X } from 'lucide-react'
 
 import Link from 'next/link'
 import React, { FormEvent, useEffect, useRef, useState } from 'react'
@@ -19,7 +19,7 @@ interface IUser {
     email: string
     password?: string
     mobile?: string
-    role: "user" | "deliveryBoy" | "admin"
+    role: "user" | "deliveryBoy" | "admin" | "superAdmin"
     image?: string
 }
 
@@ -118,9 +118,17 @@ setSearchBarOpen(false)
                     </div>
                 </div>
                 <div className='flex flex-col gap-3 font-medium mt-6'>
-                    <Link href={"/admin/add-grocery"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><PlusCircle className='w-5 h-5' /> Add Grocery</Link>
-                    <Link href={"/admin/view-grocery"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><Boxes className='w-5 h-5' /> view Grocery</Link>
-                    <Link href={"/admin/manage-orders"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><ClipboardCheck className='w-5 h-5' /> Manage Orders</Link>
+                    {user.role === "superAdmin" ? (
+                        <>
+                            <Link href={"/admin/stores"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><Store className='w-5 h-5' /> Manage Kirana Stores</Link>
+                        </>
+                    ) : (
+                        <>
+                            <Link href={"/kirana-admin"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><Store className='w-5 h-5' /> My Kirana Dashboard</Link>
+                            <Link href={"/admin/view-grocery"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><Boxes className='w-5 h-5' /> View Groceries</Link>
+                            <Link href={"/admin/manage-orders"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><ClipboardCheck className='w-5 h-5' /> Manage Orders</Link>
+                        </>
+                    )}
                 </div>
  <div className='my-5 border-t border-white/20'></div>
  <div className='flex items-center gap-3 text-red-300 font-semibold mt-auto hover:bg-red-500/20 p-3 rounded-lg transition-all' onClick={async ()=>await signOut({callbackUrl:"/"})}>
@@ -163,11 +171,17 @@ setSearchBarOpen(false)
                         <span className='absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full font-semibold shadow'>{cartData.length}</span>
                     </Link></>}
 
-                {user.role == "admin" && <>
+                {(user.role === "admin" || user.role === "superAdmin") && <>
                     <div className='hidden md:flex items-center gap-4'>
-                        <Link href={"/admin/add-grocery"} className='flex items-center gap-2 bg-white dark:bg-gray-800 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full hover:bg-green-100 dark:hover:bg-gray-700 transition-all'><PlusCircle className='w-5 h-5' /> Add Grocery</Link>
-                        <Link href={"/admin/view-grocery"} className='flex items-center gap-2 bg-white dark:bg-gray-800 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full hover:bg-green-100 dark:hover:bg-gray-700 transition-all'><Boxes className='w-5 h-5' /> view Grocery</Link>
-                        <Link href={"/admin/manage-orders"} className='flex items-center gap-2 bg-white dark:bg-gray-800 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full hover:bg-green-100 dark:hover:bg-gray-700 transition-all'><ClipboardCheck className='w-5 h-5' /> Manage Orders</Link>
+                        {user.role === "superAdmin" ? (
+                            <Link href={"/admin/stores"} className='flex items-center gap-2 bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-400 font-bold px-4 py-2 rounded-full hover:bg-purple-100 dark:hover:bg-gray-700 transition-all shadow-sm'><Store className='w-5 h-5' /> 👑 Store Control Center</Link>
+                        ) : (
+                            <>
+                                <Link href={"/kirana-admin"} className='flex items-center gap-2 bg-white dark:bg-gray-800 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full hover:bg-green-100 dark:hover:bg-gray-700 transition-all'><Store className='w-5 h-5' /> 🏪 My Kirana Dashboard</Link>
+                                <Link href={"/admin/view-grocery"} className='flex items-center gap-2 bg-white dark:bg-gray-800 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full hover:bg-green-100 dark:hover:bg-gray-700 transition-all'><Boxes className='w-5 h-5' /> View Groceries</Link>
+                                <Link href={"/admin/manage-orders"} className='flex items-center gap-2 bg-white dark:bg-gray-800 text-green-700 dark:text-green-400 font-semibold px-4 py-2 rounded-full hover:bg-green-100 dark:hover:bg-gray-700 transition-all'><ClipboardCheck className='w-5 h-5' /> Manage Orders</Link>
+                            </>
+                        )}
                     </div>
                     <div className='md:hidden bg-white dark:bg-gray-800 rounded-full w-10 h-10 flex items-center justify-center shadow-md' onClick={() => setMenuOpen(prev => !prev)}>
                         <Menu className='text-green-600 dark:text-green-400 w-6 h-6' />
