@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client"
 
 let socket: Socket | null = null
+let hasLoggedConnectError: boolean = false
 
 export const getSocket = (): Socket => {
     if (!socket) {
@@ -27,8 +28,12 @@ export const getSocket = (): Socket => {
             }
         })
 
-        // Silent handler — socket.io retries automatically, no logging needed
-        socket.on("connect_error", () => { /* retry silently */ })
+        socket.on("connect_error", (error) => {
+            if (!hasLoggedConnectError) {
+                console.error("[SOCKET] Connection error:", error.message)
+                hasLoggedConnectError = true
+            }
+        })
     }
 
     // Only call connect() if completely idle (not connected AND not already connecting)
