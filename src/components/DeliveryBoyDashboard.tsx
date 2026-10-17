@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useSelector } from 'react-redux'
 import LiveMap from './LiveMap'
 import DeliveryChat from './DeliveryChat'
-import { Loader, ArrowLeft, CheckCircle2, Bell, Volume2 } from 'lucide-react'
+import { Loader, ArrowLeft, CheckCircle2, Bell, Volume2, Sparkles } from 'lucide-react'
 import { Bar, BarChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 interface ILocation {
@@ -485,13 +485,28 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
               </h1>
               <p className='text-gray-600 dark:text-gray-400 text-xs sm:text-sm mt-0.5'>Order #{String(activeOrder.order._id).slice(-6)}</p>
             </div>
-            <button
-              onClick={handleBackToDashboard}
-              className='px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 text-gray-800 dark:text-gray-100 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 border border-gray-200 dark:border-gray-600 cursor-pointer'
-            >
-              <ArrowLeft size={16} />
-              <span>Back to Orders</span>
-            </button>
+            <div className='flex items-center gap-2'>
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('open-snapcart-support', {
+                      detail: { initialQuestion: "I need help with my active delivery order" }
+                    }))
+                  }
+                }}
+                className='px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-semibold rounded-lg transition flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800 cursor-pointer shadow-xs'
+              >
+                <Sparkles size={15} className='text-emerald-600 dark:text-emerald-400' />
+                <span>AI Support</span>
+              </button>
+              <button
+                onClick={handleBackToDashboard}
+                className='px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 text-gray-800 dark:text-gray-100 text-sm font-semibold rounded-lg transition flex items-center gap-1.5 border border-gray-200 dark:border-gray-600 cursor-pointer'
+              >
+                <ArrowLeft size={16} />
+                <span>Back to Orders</span>
+              </button>
+            </div>
           </div>
 
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-8 items-start'>
@@ -738,15 +753,29 @@ function DeliveryBoyDashboard({ earning }: { earning: number }) {
             </button>
           </div>
 
-          <button
-            onClick={() => {
-              fetchAssignments()
-              fetchCurrentOrder()
-            }}
-            className='px-3.5 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold rounded-lg transition border border-gray-200 dark:border-gray-600 cursor-pointer'
-          >
-            Refresh List
-          </button>
+          <div className='flex items-center gap-2'>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('open-snapcart-support'))
+                }
+              }}
+              className='px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-lg transition border border-emerald-200 dark:border-emerald-800 cursor-pointer flex items-center gap-1.5 shadow-xs'
+            >
+              <Sparkles size={14} className='text-emerald-600 dark:text-emerald-400' />
+              <span>AI Support</span>
+            </button>
+
+            <button
+              onClick={() => {
+                fetchAssignments()
+                fetchCurrentOrder()
+              }}
+              className='px-3.5 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-semibold rounded-lg transition border border-gray-200 dark:border-gray-600 cursor-pointer'
+            >
+              Refresh List
+            </button>
+          </div>
         </div>
 
         {currentView === 'earnings' ? (

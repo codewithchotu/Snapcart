@@ -1,5 +1,5 @@
 'use client'
-import { Boxes, ClipboardCheck, LogOut, Menu, Package, Plus, PlusCircle, RefreshCw, Search, ShoppingCartIcon, Store, User, X } from 'lucide-react'
+import { Boxes, ClipboardCheck, LogOut, Menu, Package, Plus, PlusCircle, RefreshCw, Search, ShoppingCartIcon, Sparkles, Store, User, X } from 'lucide-react'
 
 import Link from 'next/link'
 import React, { FormEvent, useEffect, useRef, useState } from 'react'
@@ -129,6 +129,18 @@ setSearchBarOpen(false)
                             <Link href={"/admin/manage-orders"} className='flex items-center gap-3 p-3 rounded-lg bg-white/10 hover:bg-white/20 hover:pl-4 transition-all'><ClipboardCheck className='w-5 h-5' /> Manage Orders</Link>
                         </>
                     )}
+                    <button
+                        onClick={() => {
+                            setMenuOpen(false)
+                            if (typeof window !== 'undefined') {
+                                window.dispatchEvent(new CustomEvent('open-snapcart-support'))
+                            }
+                        }}
+                        className='flex items-center gap-3 p-3 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-100 hover:pl-4 transition-all text-left font-medium cursor-pointer'
+                    >
+                        <Sparkles className='w-5 h-5 text-emerald-300' />
+                        AI Support Assistant
+                    </button>
                 </div>
  <div className='my-5 border-t border-white/20'></div>
  <div className='flex items-center gap-3 text-red-300 font-semibold mt-auto hover:bg-red-500/20 p-3 rounded-lg transition-all' onClick={async ()=>await signOut({callbackUrl:"/"})}>
@@ -222,6 +234,19 @@ setSearchBarOpen(false)
                                     <Package className='w-5 h-5 text-green-600' />
                                     My Orders
                                 </Link>}
+
+                                <button
+                                    onClick={() => {
+                                        setOpen(false)
+                                        if (typeof window !== 'undefined') {
+                                            window.dispatchEvent(new CustomEvent('open-snapcart-support'))
+                                        }
+                                    }}
+                                    className='flex items-center gap-2 w-full text-left px-3 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg text-emerald-700 dark:text-emerald-300 font-medium transition-colors cursor-pointer'
+                                >
+                                    <Sparkles className='w-5 h-5 text-emerald-600 dark:text-emerald-400' />
+                                    AI Support Assistant
+                                </button>
 
                                 {availableRoles.length > 1 && (
                                     <div className='py-2 border-t border-b border-gray-100 dark:border-gray-700 my-1'>

@@ -6,6 +6,7 @@ import Provider from "@/Provider";
 import StoreProvider from "@/redux/StoreProvider";
 import InitUser from "@/InitUser";
 import { ThemeProvider } from "@/context/ThemeContext";
+import SupportChat from "@/components/SupportChat";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -49,6 +50,7 @@ export default function RootLayout({
             <ThemeProvider>
               <InitUser />
               {children}
+              <SupportChat />
             </ThemeProvider>
           </StoreProvider>
         </Provider>

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node scripts/test-superadmin-auth.mjs"
+    "test": "node scripts/test-superadmin-auth.mjs && npx tsx --env-file=.env.local --test scripts/test-support-ai.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.0",
