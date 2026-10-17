@@ -2,16 +2,23 @@ import { auth } from "@/auth";
 
 import connectDb from "@/lib/db";
 import Grocery from "@/models/grocery.model";
+import { isSuperAdmin } from "@/lib/roles";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req:NextRequest) {
     try {
         await connectDb()
         const session=await auth()
-        if(session?.user?.role!=="admin"){
+        if (!session?.user) {
             return NextResponse.json(
-                {message:"you are not admin"},
-                {status:400}
+                { message: "Unauthorized" },
+                { status: 401 }
+            )
+        }
+        if (session.user.role !== "admin" && !isSuperAdmin(session.user)) {
+            return NextResponse.json(
+                { message: "You are not authorized as admin" },
+                { status: 403 }
             )
         }
     const {groceryId}=await req.json()

@@ -4,6 +4,7 @@ import emitEventHandler from "@/lib/emitEventHandler";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
 import Order from "@/models/order.model";
 import User from "@/models/user.model";
+import { isSuperAdmin } from "@/lib/roles";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest, context: any) {
@@ -11,7 +12,13 @@ export async function POST(req: NextRequest, context: any) {
     try {
         await connectDb()
         const session = await auth()
-        if (!session || session?.user?.role !== "admin") {
+        if (!session?.user) {
+          return NextResponse.json(
+            { message: "Unauthorized" },
+            { status: 401 }
+          )
+        }
+        if (session.user.role !== "admin" && !isSuperAdmin(session.user)) {
           console.warn("[ADMIN-ORDER] Unauthorized update-order-status attempt")
           return NextResponse.json(
             { message: "You are not authorized as admin" },

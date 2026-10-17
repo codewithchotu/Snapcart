@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import connectDb from "@/lib/db";
 import User from "@/models/user.model";
 
+import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req:NextRequest){
@@ -13,7 +14,7 @@ export async function POST(req:NextRequest){
            return NextResponse.json({ message: "unauthorized" }, { status: 401 })
        }
        let user = null
-       if (session?.user?.id) {
+       if (session?.user?.id && mongoose.Types.ObjectId.isValid(session.user.id)) {
           user = await User.findByIdAndUpdate(
             session.user.id,
             { role, mobile },

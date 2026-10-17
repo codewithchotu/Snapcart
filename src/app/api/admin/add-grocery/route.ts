@@ -3,18 +3,19 @@ import uploadOnCloudinary from "@/lib/cloudinary";
 import connectDb from "@/lib/db";
 import Grocery from "@/models/grocery.model";
 import Store from "@/models/store.model";
+import { isSuperAdmin } from "@/lib/roles";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
     try {
         await connectDb()
         const session = await auth()
-        if (!session?.user?.id) {
+        if (!session?.user) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
         }
 
         // Super Admin is for store onboarding and admin authentication, not grocery stock entry
-        if (session.user.role === "superAdmin") {
+        if (isSuperAdmin(session.user)) {
             return NextResponse.json(
                 { message: "Super Admin does not add groceries. Groceries must be added by the assigned Kirana Store Admin." },
                 { status: 403 }

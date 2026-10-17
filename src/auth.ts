@@ -6,18 +6,17 @@ import bcrypt from "bcryptjs"
 import Google from "next-auth/providers/google"
 
 
+import mongoose from "mongoose"
+import { isSuperAdmin } from "./lib/roles"
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // trustHost is required on Vercel / behind any reverse proxy so Auth.js
   // trusts the x-forwarded-host header for URL resolution.
   trustHost: true,
 
-  // Explicitly pin useSecureCookies=true so the PKCE code_verifier cookie
-  // name is always "__Secure-authjs.pkce.code_verifier" on both the signin
-  // and callback requests. Without this, if url.protocol detection is
-  // inconsistent between the two requests (a known issue on some Vercel
-  // edge/proxy configurations), the cookie name changes → the JWT
-  // decryption salt changes → "Invalid code verifier" from Google.
-  useSecureCookies: true,
+  // Pin useSecureCookies in production (HTTPS) so PKCE code_verifier cookie
+  // name is consistent, while allowing plain cookies in local development.
+  useSecureCookies: process.env.NODE_ENV === "production",
 
   providers: [
     Credentials({
@@ -56,11 +55,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             if (!isMatch) {
                 throw new Error("incorrect password")
             }
+
+            const userRole = isSuperAdmin(user) ? "superAdmin" : user.role
             return {
                 id: user._id.toString(),
                 email: user.email,
                 name: user.name,
-                role: user.role
+                role: userRole
             }
           } catch (err: any) {
             console.error("[AUTH] Credentials authorize error:", err.message)
@@ -80,15 +81,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (account?.provider === "google") {
           await connectDb()
           const normalizedEmail = (user.email || "").toLowerCase().trim()
-          let dbUser = await User.findOne({ email: normalizedEmail })
+          const safeRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i")
+          let dbUser = await User.findOne({ email: safeRegex })
           if (!dbUser) {
             try {
               const Store = (await import("@/models/store.model")).default
               const matchingStores = await Store.find({ pendingAdminEmails: normalizedEmail })
-              const assignedRole = matchingStores.length > 0 ? "admin" : "user"
+              const assignedRole = isSuperAdmin({ email: normalizedEmail })
+                ? "superAdmin"
+                : matchingStores.length > 0 ? "admin" : "user"
 
               dbUser = await User.create({
-                name: user.name,
+                name: user.name || normalizedEmail.split('@')[0] || "User",
                 email: normalizedEmail,
                 image: user.image,
                 role: assignedRole,
@@ -106,15 +110,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             } catch (e: any) {
               // Handle duplicate-key race condition
               if (e.code === 11000) {
-                dbUser = await User.findOne({ email: normalizedEmail })
+                dbUser = await User.findOne({ email: safeRegex })
               } else {
                 console.error("[AUTH] Google signIn DB create error:", e.message)
                 throw e
               }
             }
+          } else if (isSuperAdmin({ email: normalizedEmail }) && dbUser.role !== "superAdmin") {
+            // Keep DB role aligned with Super Admin identity
+            dbUser.role = "superAdmin"
+            await dbUser.save()
           }
-          user.id = dbUser._id.toString()
-          user.role = dbUser.role
+
+          if (dbUser) {
+            user.id = dbUser._id.toString()
+            user.role = isSuperAdmin(dbUser) ? "superAdmin" : dbUser.role
+          }
         }
         return true
       } catch (err: any) {
@@ -123,7 +134,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return false
       }
     },
-    jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session }) {
         // On initial sign-in, user object is available — persist all fields
         if (user) {
             token.id = user.id
@@ -140,15 +151,50 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.id = session.id
           }
         }
+
+        const isValidMongoId = typeof token.id === "string" && mongoose.Types.ObjectId.isValid(token.id)
+        const isSuper = isSuperAdmin({ email: token.email as string, role: token.role as string })
+
+        // Fallback or Refresh: If token lacks valid MongoDB ObjectId, or missing role, or is Super Admin
+        if (!isValidMongoId || !token.role || isSuper || trigger === "update") {
+          try {
+            await connectDb()
+            const emailQuery = token.email ? (token.email as string).toLowerCase().trim() : ""
+            if (emailQuery) {
+              const safeRegex = new RegExp(`^${emailQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i")
+              const dbUser = await User.findOne({ email: safeRegex })
+              if (dbUser) {
+                token.id = dbUser._id.toString()
+                if (isSuperAdmin(dbUser) || isSuperAdmin({ email: emailQuery })) {
+                  token.role = "superAdmin"
+                  if (dbUser.role !== "superAdmin") {
+                    dbUser.role = "superAdmin"
+                    await dbUser.save()
+                  }
+                } else {
+                  token.role = dbUser.role
+                }
+                if (!token.name) token.name = dbUser.name
+              }
+            }
+          } catch (e) {
+            console.error("[AUTH] JWT sync fallback error:", e)
+          }
+        }
+
+        if (isSuper) {
+          token.role = "superAdmin"
+        }
+
         return token
     },
     session({ session, token }) {
         if (session.user) {
-            session.user.id = token.id as string
-            session.user.name = token.name as string
-            session.user.email = token.email as string
-            // Ensure role is always a string; fall back to "user" only if truly missing
-            session.user.role = (token.role as string) || "user"
+            session.user.id = (token.id as string) || (token.sub as string) || ""
+            session.user.name = (token.name as string) || session.user.name || ""
+            session.user.email = (token.email as string) || session.user.email || ""
+            const isSuper = isSuperAdmin({ email: session.user.email, role: token.role as string })
+            session.user.role = isSuper ? "superAdmin" : ((token.role as string) || "user")
         }
         return session
     },
@@ -161,5 +207,5 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy:"jwt",
     maxAge:10*24*60*60  // 10 days in seconds (not milliseconds)
   },
-  secret:process.env.AUTH_SECRET
+  secret:process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET
 })

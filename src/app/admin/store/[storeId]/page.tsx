@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function StoreOwnerDashboard({ params }: { params: Promise<{ storeId: string }> }) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [storeId, setStoreId] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
@@ -17,14 +17,22 @@ export default function StoreOwnerDashboard({ params }: { params: Promise<{ stor
   }, [params])
 
   useEffect(() => {
-    if (!storeId || !session?.user) return;
+    if (!storeId || status === "loading") return;
+    if (!session?.user) {
+      router.push("/login");
+      return;
+    }
     const fetchStore = async () => {
       try {
         const res = await fetch(`/api/admin/store/${storeId}`);
         if (!res.ok) throw new Error();
         const s = await res.json();
-        if (session?.user?.id !== s.owner) {
-          router.push("/admin");
+        const isSuper = session?.user?.role === "superAdmin" || session?.user?.email === "mo0322975@gmail.com";
+        const isOwner = session?.user?.id === s.owner;
+        const isAssigned = Array.isArray(s.assignedAdmins) && s.assignedAdmins.some((a: any) => String(a?._id || a) === String(session?.user?.id));
+        
+        if (!isSuper && !isOwner && !isAssigned) {
+          router.push("/admin/stores");
           return;
         }
         setStore(s);
@@ -37,13 +45,13 @@ export default function StoreOwnerDashboard({ params }: { params: Promise<{ stor
         });
         setQr(qrUrl);
       } catch {
-        router.push("/admin");
+        router.push("/admin/stores");
       }
     };
     fetchStore();
-  }, [storeId, session, router]);
+  }, [storeId, session, status, router]);
 
-  if (!store) return <p className="p-4 pt-28">Loading…</p>;
+  if (status === "loading" || !store) return <p className="p-4 pt-28 text-center text-gray-500 font-medium">Loading store details...</p>;
 
   return (
     <section className="max-w-xl mx-auto p-6 bg-white rounded-lg shadow-lg mt-28">

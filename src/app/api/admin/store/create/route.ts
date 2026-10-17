@@ -1,13 +1,18 @@
 import { auth } from "@/auth";
 import connectDb from "@/lib/db";
 import Store from "@/models/store.model";
+import { isSuperAdmin } from "@/lib/roles";
 import { NextRequest, NextResponse } from "next/server";
 
 // POST /api/admin/store/create
 export async function POST(req: NextRequest) {
   await connectDb();
   const session = await auth();
-  if (!session?.user?.id || (session.user.role !== "superAdmin" && session.user.email !== "mo0322975@gmail.com")) {
+  if (!session?.user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!isSuperAdmin(session.user)) {
     return NextResponse.json({ message: "Only Super Admin can register Kirana stores." }, { status: 403 });
   }
 

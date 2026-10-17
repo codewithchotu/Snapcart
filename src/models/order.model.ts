@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import "./user.model";
 
 
 

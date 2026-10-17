@@ -29,7 +29,10 @@ export async function POST(req:NextRequest) {
    const matchingStores = await Store.find({ pendingAdminEmails: normalizedEmail })
 
    const isAssignedKiranaAdmin = matchingStores.length > 0
-   const role = isAssignedKiranaAdmin ? "admin" : "user"
+   const { isSuperAdmin } = await import("@/lib/roles")
+   const role = isSuperAdmin({ email: normalizedEmail })
+     ? "superAdmin"
+     : isAssignedKiranaAdmin ? "admin" : "user"
 
    const user = await User.create({
      name,

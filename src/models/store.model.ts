@@ -41,7 +41,6 @@ const storeSchema = new mongoose.Schema<IStore>({
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" },
 }, { timestamps: true });
 
-storeSchema.index({ storeCode: 1 });
 storeSchema.index({ owner: 1 });
 storeSchema.index({ assignedAdmins: 1 });
 

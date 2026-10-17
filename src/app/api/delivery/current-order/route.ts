@@ -1,6 +1,8 @@
 import { auth } from "@/auth";
 import connectDb from "@/lib/db";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
+import Order from "@/models/order.model";
+import User from "@/models/user.model";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -9,16 +11,13 @@ export async function GET() {
         const session = await auth()
         const deliveryBoyId = session?.user?.id
         if (!deliveryBoyId) {
-            return NextResponse.json({ active: false }, { status: 200 })
+            return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
         }
 
         const assignedRecords = await DeliveryAssignment.find({
             assignedTo: deliveryBoyId,
             status: "assigned"
-        }).populate({
-            path: "order",
-            populate: { path: "address" }
-        })
+        }).populate("order")
 
         let activeAssignment: any = null
 
@@ -53,4 +52,4 @@ export async function GET() {
             { status: 500 }
         )
     }
-}
+}

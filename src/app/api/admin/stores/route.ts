@@ -1,17 +1,22 @@
 import { auth } from "@/auth";
 import connectDb from "@/lib/db";
 import Store from "@/models/store.model";
+import { isSuperAdmin as checkIsSuperAdmin } from "@/lib/roles";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
     await connectDb();
     const session = await auth();
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const isSuperAdmin = session.user.role === "superAdmin" || session.user.email === "mo0322975@gmail.com";
+    const isSuperAdmin = checkIsSuperAdmin(session.user);
+
+    if (!isSuperAdmin && session.user.role !== "admin") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
 
     let stores;
     if (isSuperAdmin) {

@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import "./order.model";
+import "./user.model";
 
 export interface IDeliveryAssigment{
     _id?:mongoose.Types.ObjectId

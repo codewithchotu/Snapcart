@@ -11,7 +11,7 @@ import connectDb from '@/lib/db'
 import Grocery, { IGrocery } from '@/models/grocery.model'
 
 import User from '@/models/user.model'
-
+import mongoose from 'mongoose'
 import { redirect } from 'next/navigation'
 
 
@@ -29,8 +29,12 @@ const searchParams=await props.searchParams
   if (!session) redirect("/login")
   console.log(session?.user)
   let user = null
-  if (session?.user?.id) {
-    user = await User.findById(session.user.id)
+  if (session?.user?.id && mongoose.Types.ObjectId.isValid(session.user.id)) {
+    try {
+      user = await User.findById(session.user.id)
+    } catch (e) {
+      user = null
+    }
   }
   if (!user && session?.user?.email) {
     const normalizedEmail = session.user.email.toLowerCase().trim()
@@ -40,6 +44,21 @@ const searchParams=await props.searchParams
     }
     if (!user) {
       user = await User.findOne({ email: safeRegex })
+    }
+    // If authenticated via OAuth but missing user in DB, create safely
+    if (!user) {
+      try {
+        user = await User.create({
+          name: session.user.name || normalizedEmail.split('@')[0] || "User",
+          email: normalizedEmail,
+          image: session.user.image,
+          role: "user"
+        })
+      } catch (err: any) {
+        if (err.code === 11000) {
+          user = await User.findOne({ email: safeRegex })
+        }
+      }
     }
   }
 

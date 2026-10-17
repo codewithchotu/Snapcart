@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         if (!session || !session.user) {
             return NextResponse.json(
                 { message: "user is not authenticated" },
-                { status: 400 }
+                { status: 401 }
             )
         }
 

@@ -2,15 +2,25 @@ import { auth } from "@/auth";
 import connectDb from "@/lib/db";
 import Order from "@/models/order.model";
 import Store from "@/models/store.model";
+import User from "@/models/user.model";
+import { isSuperAdmin } from "@/lib/roles";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
     try {
         await connectDb()
         const session = await auth()
-        if (!session?.user?.id || session.user.role !== "admin") {
+        if (!session?.user) {
           return NextResponse.json(
-            [],
+            { message: "Unauthorized" },
+            { status: 401 }
+          )
+        }
+
+        const isSuper = isSuperAdmin(session.user)
+        if (!isSuper && session.user.role !== "admin") {
+          return NextResponse.json(
+            { message: "Forbidden" },
             { status: 403 }
           )
         }
@@ -18,31 +28,36 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const storeId = searchParams.get("storeId")
 
-        // Find all stores owned by or assigned to this Kirana admin
-        const adminStores = await Store.find({
-          $or: [
-            { owner: session.user.id },
-            { assignedAdmins: session.user.id }
-          ]
-        }).select("_id")
-        const storeIds = adminStores.map(s => s._id)
-
         const query: any = {}
-        if (storeId) {
-          const isAuthorized = storeIds.some(id => id.toString() === storeId)
-          if (!isAuthorized) {
-            return NextResponse.json([], { status: 403 })
+        if (isSuper) {
+          if (storeId) {
+            query.$or = [{ store: storeId }, { "items.store": storeId }]
           }
-          query.$or = [{ store: storeId }, { "items.store": storeId }]
         } else {
-          // All orders belonging to any of this admin's stores
-          // Also include legacy orders that don't have a store attached if admin has stores
-          query.$or = [
-            { store: { $in: storeIds } },
-            { "items.store": { $in: storeIds } },
-            { store: { $exists: false } },
-            { store: null }
-          ]
+          // Find all stores owned by or assigned to this Kirana admin
+          const adminStores = await Store.find({
+            $or: [
+              { owner: session.user.id },
+              { assignedAdmins: session.user.id }
+            ]
+          }).select("_id")
+          const storeIds = adminStores.map(s => s._id)
+
+          if (storeId) {
+            const isAuthorized = storeIds.some(id => id.toString() === storeId)
+            if (!isAuthorized) {
+              return NextResponse.json([], { status: 403 })
+            }
+            query.$or = [{ store: storeId }, { "items.store": storeId }]
+          } else {
+            // All orders belonging to any of this admin's stores
+            query.$or = [
+              { store: { $in: storeIds } },
+              { "items.store": { $in: storeIds } },
+              { store: { $exists: false } },
+              { store: null }
+            ]
+          }
         }
 
         const orders = await Order.find(query)

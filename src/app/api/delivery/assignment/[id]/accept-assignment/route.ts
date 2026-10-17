@@ -3,6 +3,7 @@ import connectDb from "@/lib/db";
 import emitEventHandler from "@/lib/emitEventHandler";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
 import Order from "@/models/order.model";
+import User from "@/models/user.model";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest, context: any) {
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest, context: any) {
 
         // If this assignment is already assigned to THIS delivery boy, return success immediately
         if (assignment.status === "assigned" && String(assignment.assignedTo) === String(deliveryBoyId)) {
-            await assignment.populate({ path: "order", populate: { path: "address" } })
+            await assignment.populate("order")
             console.log(`[ACCEPT] deliveryBoyId: ${deliveryBoyId}`)
             console.log(`[ACCEPT] assignmentId: ${id}`)
             console.log(`[ACCEPT] existingActiveAssignment: ${id}`)
@@ -98,7 +99,7 @@ export async function GET(req: NextRequest, context: any) {
             }
         )
 
-        await assignment.populate({ path: "order", populate: { path: "address" } })
+        await assignment.populate("order")
 
         console.log(`[ACCEPT] deliveryBoyId: ${deliveryBoyId}`)
         console.log(`[ACCEPT] assignmentId: ${id}`)

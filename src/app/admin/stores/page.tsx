@@ -4,35 +4,49 @@ import Store from "@/models/store.model"
 import { redirect } from "next/navigation"
 import AdminStoresDashboard from "./AdminStoresDashboard"
 import Nav from "@/components/Nav"
-import User from "@/models/user.model"
+import { findUserFromSession, isSuperAdmin as checkIsSuperAdmin } from "@/lib/auth-helpers"
 
 export default async function AdminStoresPage() {
   await connectDb()
   const session = await auth()
-  if (!session?.user?.id) redirect("/login")
+  if (!session?.user) redirect("/login")
 
-  const dbUser = await User.findById(session.user.id).lean() as any
-  const isSuperAdmin = dbUser?.role === "superAdmin" || session.user.email === "mo0322975@gmail.com"
+  const dbUser = await findUserFromSession(session.user) as any
+  const isSuperAdmin = checkIsSuperAdmin(dbUser) || checkIsSuperAdmin(session.user)
 
-  if (!dbUser || (!isSuperAdmin && dbUser.role !== "admin")) redirect("/unauthorized")
+  // Super Admin is always authorized. Normal users must be Kirana Admins ("admin").
+  if (!isSuperAdmin && dbUser?.role !== "admin") {
+    redirect("/unauthorized")
+  }
 
   // Find stores: all stores for Super Admin, or owned/assigned for Kirana Admin
+  const activeUserId = dbUser?._id ? dbUser._id.toString() : session.user.id
   const query = isSuperAdmin
     ? {}
-    : { $or: [{ owner: session.user.id }, { assignedAdmins: session.user.id }] }
+    : { $or: [{ owner: activeUserId }, { assignedAdmins: activeUserId }] }
 
   const stores = await Store.find(query)
     .populate("owner assignedAdmins", "name email role")
     .lean()
 
+  const navUser = dbUser
+    ? JSON.parse(JSON.stringify(dbUser))
+    : {
+        _id: activeUserId,
+        name: session.user.name || "Super Admin",
+        email: session.user.email || "",
+        role: isSuperAdmin ? "superAdmin" : "admin"
+      }
+
   return (
     <>
-      <Nav user={JSON.parse(JSON.stringify(dbUser))} />
+      <Nav user={navUser} />
       <AdminStoresDashboard
         stores={JSON.parse(JSON.stringify(stores))}
         isSuperAdmin={isSuperAdmin}
-        currentUserId={session.user.id}
+        currentUserId={activeUserId}
       />
     </>
   )
 }
+

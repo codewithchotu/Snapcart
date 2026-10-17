@@ -23,6 +23,32 @@ function Login() {
     const router = useRouter()
     const session = useSession()
 
+    // Redirect authenticated users away from /login
+    React.useEffect(() => {
+      if (session.status === "authenticated") {
+        const params = new URLSearchParams(window.location.search)
+        const callbackUrl = params.get("callbackUrl") || "/"
+        router.push(callbackUrl)
+      }
+    }, [session.status, router])
+
+    // Inspect URL for auth error params (e.g. from OAuth failure or AccessDenied)
+    React.useEffect(() => {
+      const params = new URLSearchParams(window.location.search)
+      const error = params.get("error")
+      if (error) {
+        if (error === "OAuthSignin" || error === "OAuthCallback" || error === "OAuthCreateAccount" || error === "OAuthAccountNotLinked") {
+          setErrorMsg("Google sign-in could not be completed. Please try again.")
+        } else if (error === "AccessDenied") {
+          setErrorMsg("Access denied. Please check your credentials or account permissions.")
+        } else if (error === "Configuration") {
+          setErrorMsg("Authentication service configuration error. Please contact support.")
+        } else {
+          setErrorMsg(`Authentication notice: ${error}`)
+        }
+      }
+    }, [])
+
     const executeLogin = async (roleToUse?: string) => {
       setLoading(true)
       setErrorMsg("")
@@ -82,7 +108,9 @@ function Login() {
         if (googleLoading) return
         setGoogleLoading(true)
         try {
-            await signIn("google", { callbackUrl: "/" })
+            const params = new URLSearchParams(window.location.search)
+            const callbackUrl = params.get("callbackUrl") || "/"
+            await signIn("google", { callbackUrl })
         } catch (error) {
             console.log(error)
             setGoogleLoading(false)

@@ -6,21 +6,22 @@ import { redirect } from "next/navigation"
 import KiranaDashboard from "./KiranaDashboard"
 import Nav from "@/components/Nav"
 import Grocery from "@/models/grocery.model"
+import { findUserFromSession, isSuperAdmin } from "@/lib/auth-helpers"
 
 export default async function KiranaAdminPage() {
   await connectDb()
   const session = await auth()
 
   // Must be logged in
-  if (!session?.user?.id) redirect("/login")
+  if (!session?.user) redirect("/login")
 
-  const dbUser = await User.findById(session.user.id).lean() as any
+  const dbUser = await findUserFromSession(session.user) as any
 
   // Must exist in DB
   if (!dbUser) redirect("/login")
 
   // Super admins are NOT kirana admins — redirect them to their dashboard
-  if (dbUser.role === "superAdmin" || session.user.email === "mo0322975@gmail.com") {
+  if (isSuperAdmin(dbUser) || isSuperAdmin(session.user)) {
     redirect("/admin/stores")
   }
 
